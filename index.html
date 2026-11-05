@@ -4346,6 +4346,7 @@ PQ.levels = (function () {
     KeyE: 'act', KeyX: 'act' };
   window.addEventListener('keydown', function (e) {
     if (G.mode === 'create' && G.create && G.create.typing) { typeKey(e); return; }   // the name, letter by letter
+    if (e.code === 'KeyF' && !e.repeat) { e.preventDefault(); toggleFullscreen(); return; }
     var k = KEYMAP[e.code]; if (!k) return;
     e.preventDefault(); firstGesture();
     if (e.repeat) return;
@@ -6364,6 +6365,27 @@ PQ.levels = (function () {
     U.hud(g, G.score.stars);
     button(454, 4, 22, 22, function () { snd.toggleMusic(); });
     if (!snd.musicOn()) { U.rect(g, INK, 456, 13, 19, 2); }
+    fullscreenButton(434, 6);
+  }
+  /* ---- full screen: a button by the music one (and the F key). Phones that
+   * cannot (an iPhone) simply do not show it. */
+  function canFullscreen() { var d = document.documentElement; return !!(d.requestFullscreen || d.webkitRequestFullscreen); }
+  function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function toggleFullscreen() {
+    try {
+      if (isFullscreen()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+      var d = document.documentElement, p = (d.requestFullscreen || d.webkitRequestFullscreen).call(d);
+      var lock = function () { try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (e) {} };
+      if (p && p.then) p.then(lock).catch(function () {}); else lock();
+    } catch (e) {}
+  }
+  var FS_ICON = ['kk....kk', 'k......k', '........', '........', '........', '........', 'k......k', 'kk....kk'];
+  var FS_OFF = ['.k....k.', 'kk....kk', '........', '........', '........', '........', 'kk....kk', '.k....k.'];
+  function fullscreenButton(bx, by) {
+    if (!canFullscreen()) return;
+    U.rect(g, INK, bx + 1, by, 15, 17); U.rect(g, INK, bx, by + 1, 17, 15); U.rect(g, GOLD, bx + 1, by + 1, 15, 15); U.rect(g, U.COL.goldHi, bx + 2, by + 1, 13, 1);
+    U.icon(g, isFullscreen() ? FS_OFF : FS_ICON, bx + 5, by + 4, { k: INK });
+    button(bx - 2, by - 2, 21, 21, toggleFullscreen);
   }
   function drawTip() {
     if (!G.tip || G.script) return;
@@ -6941,6 +6963,7 @@ PQ.levels = (function () {
       button(bx, by, bw, bh, (function (a) { return function () { titleGo(a, sv); }; })(it[2]));
     });
     if (!G.touch) { if (items.length > 1) F.draw(g, '← →  choose', 6, 245, { color: '#ffffff', outline: INK, bold: false }); F.draw(g, 'E  OK', 6, 257, { color: '#ffffff', outline: INK, bold: false }); }
+    fullscreenButton(457, 6);
   }
   function ribbon(cx, y, text) {
     var tw = F.measure(text) + 24, x = Math.round(cx - tw / 2);
