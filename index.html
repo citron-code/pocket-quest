@@ -5582,7 +5582,7 @@ PQ.levels = (function () {
       lineStep('grabbo', 'Our... friend? Our school!', { expr: 'happy', emote: '♪' }),
       { run: function (dt, s) {   // the Pocket opens: everything comes back
           if (!s.init) {
-            s.init = true; snd.play('win'); G.portal = { x: gb.x + 4, y: gb.y + 6, r: 0, want: 10 };
+            s.init = true; snd.play('win'); G.portal = pocketPortal(gb, 9, false);
             for (var i = 0; i < 22; i++) G.rain.push({ item: ['pencil', 'book', 'crayon', 'ruler', 'eraser', 'ball', 'apple', 'lunchbox'][i % 8], x: x0 + 30 + Math.random() * 420, y: -20 - Math.random() * 160, vy: 40 + Math.random() * 60 });
             G.npcs.forEach(function (n) { if (n.cast) { n.cheer = 2.4; n.expr = 'happy'; } });
           }
@@ -5593,7 +5593,7 @@ PQ.levels = (function () {
       lineStep('hero', 'I am new here, too. We are all friends now!', { expr: 'happy', pose: 'cheer' }),
       // ...and then the dark comes back
       { run: function (dt, s) { s.k = (s.k || 0) + dt; return s.k > 0.8; },
-        start: function () { snd.hush(true); G.portal = { x: gb.x + 4, y: gb.y + 6, r: 0, want: 16, dark: true }; gb.expr = 'neutral'; emote(gb, '!', 2); } },
+        start: function () { snd.hush(true); G.portal = pocketPortal(gb, 12, true); gb.expr = 'neutral'; emote(gb, '!', 2); } },
       { whisper: { text: '...Grabbo... more... words...', dur: 3.2 } },
       lineStep('pip', 'What is that?!', { expr: 'surprised' }),
       { run: function (dt, s) {   // a shadow hand comes out of the Pocket and takes Pip
@@ -5622,7 +5622,8 @@ PQ.levels = (function () {
       lineStep('grabbo', 'Wait! I can help!', { expr: 'happy' }),
       { run: function (dt, s) {   // and Grabbo jumps after them
           s.k = Math.min(1, (s.k || 0) + dt * 1.4);
-          var pt = G.portal; gb.scale = 1 - s.k * 0.85; toward(gb, pt.x, pt.y - 8, Math.min(1, dt * 4));
+          var pt = G.portal; pt.follow = false;   // the Pocket stays where it is while he dives into it
+          gb.scale = 1 - s.k * 0.85; toward(gb, pt.x, pt.y - 8, Math.min(1, dt * 4));
           if (s.k >= 1) { G.grabbo = null; burst(pt.x, pt.y, '#c9a7f5', 16); snd.play('whoosh'); return true; }
           return false;
         } },
@@ -5933,7 +5934,10 @@ PQ.levels = (function () {
     // ---- things raining back out of the Pocket, notes in the music room, the Pocket opening
     G.rain = G.rain.filter(function (r) { r.vy += 260 * dt; r.y += r.vy * dt; if (r.y >= GY) { burst(r.x, GY - 4, '#ffffff', 3); return false; } return true; });
     G.notesFx = G.notesFx.filter(function (q) { q.t -= dt; q.y += q.vy * dt; q.x += Math.sin(G.t * 5 + q.y * 0.1) * 0.4; return q.t > 0; });
-    if (G.portal) G.portal.r += ((G.portal.want || 0) - G.portal.r) * Math.min(1, dt * 4);
+    if (G.portal) {
+      G.portal.r += ((G.portal.want || 0) - G.portal.r) * Math.min(1, dt * 4);
+      if (G.portal.follow && G.grabbo) { var pk = pocketOf(G.grabbo); G.portal.x = pk.x; G.portal.y = pk.y; }
+    }
     // ---- particles / bubbles / emotes / tip
     G.parts = G.parts.filter(function (q) { q.life -= dt; q.vy += (q.g === undefined ? 300 : q.g) * dt; q.x += q.vx * dt; q.y += q.vy * dt; return q.life > 0; });
     G.bubbles = G.bubbles.filter(function (b) { b.t -= dt; return b.t > 0; });
@@ -6093,19 +6097,19 @@ PQ.levels = (function () {
       drawSprite(sp, o.x - cx, GY + 1, o.dir > 0 ? 1 : -1);
     });
     G.npcs.forEach(function (n) { if (n.x - cx > -40 && n.x - cx < VW + 40) drawNpc(n, cx); });
-    if (G.portal) drawPortal(G.portal, cx);
-    // the hero
+    // the hero (diving into the Pocket, the hero is drawn later, in front of Grabbo)
     var h = G.hero, blink = h.hurt > 0 && Math.floor(G.t * 16) % 2;
-    if (!h.hidden) {
+    if (!h.hidden && !h.frozen) {
       if (!h.frozen) WD.shadow(g, h.x + h.w / 2 - cx, GY + 1, h.onGround ? 17 : 12);
       if (!blink) drawSprite(heroLook(), h.x + h.w / 2 - cx, h.y + h.h + 1, h.face);
     }
     // Pip
     var p = G.pip;
-    if (!p.hidden) {
+    function drawPip() {
       var pip = CH.get('pip', p.resting ? 'rest' : (Math.floor(G.t * 10) % 2 ? 'flap' : 'rest'), talkingNow('pip') || (G.dialog && G.dialog.who === 'pip' && G.dialog.expr === 'happy') ? 'happy' : 'neutral', 1);
       drawSprite(pip, p.x - cx, p.y + 1, p.face);
     }
+    if (!p.hidden && !p.pin) drawPip();   // held by a scene (the crayon, the hand): in front of Grabbo, below
     // Grabbo: Hush's dark around him while it has him
     if (G.grabbo) {
       var gb = G.grabbo, gx = gb.x - cx;
@@ -6121,11 +6125,16 @@ PQ.levels = (function () {
       var sc2 = gb.scale === undefined ? 1 : gb.scale;
       if (sc2 !== 1) {
         var gw = Math.max(1, Math.round(gs.width * sc2)), gh = Math.max(1, Math.round(gs.height * sc2));
-        g.drawImage(gs, Math.round(gx - gw / 2), Math.round(gb.y - gh / 2), gw, gh);
+        g.save(); g.translate(Math.round(gx), Math.round(gb.y)); if ((gb.face || -1) < 0) g.scale(-1, 1);   // shrinking, still facing the same way
+        g.drawImage(gs, -Math.round(gw / 2), -Math.round(gh / 2), gw, gh); g.restore();
       } else drawSprite(gs, gx, gb.y + 22, gb.face || -1);
       if (gb.hurt > 0 && Math.floor(G.t * 20) % 2) { g.globalAlpha = 0.5; g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(gx, gb.y, 16, 16, 0, 0, 7); g.fill(); g.globalAlpha = 1; }
     }
+    // the open Pocket is on his pocket, in front of him; what goes into it goes in front too
+    if (G.portal) drawPortal(G.portal, cx);
     if (G.hand) drawHand(G.hand, cx);
+    if (!p.hidden && p.pin) drawPip();
+    if (!h.hidden && h.frozen && !blink) drawSprite(heroLook(), h.x + h.w / 2 - cx, h.y + h.h + 1, h.face);
     G.flyers.forEach(function (fl) {
       if (fl.t < 0) return;
       var k = fl.t, tx = fl.tx(), ty = fl.ty();
@@ -6141,6 +6150,10 @@ PQ.levels = (function () {
     else if (th === 'library') SC.libraryLight(g, cx, G.t);
     else if (th === 'roof') SC.roofLight(g, G.t);
   }
+  /** the middle of Grabbo's pocket on screen (he faces right in his sprite; -1 flips him) */
+  function pocketOf(gb) { return { x: gb.x + 3.5 * (gb.face || -1), y: gb.y + 10 - (gb.frame ? 1 : 0) }; }
+  /** the Pocket opening right on his pocket, and moving with it */
+  function pocketPortal(gb, size, dark) { var pk = pocketOf(gb); return { x: pk.x, y: pk.y, r: 0, want: size, dark: dark, follow: true }; }
   /* the Pocket open as a hole of swirling purple (bright: things come back; dark: Hush) */
   function drawPortal(pt, cx) {
     if (pt.r < 0.5) return;
