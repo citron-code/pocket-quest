@@ -4,11 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#1d1530">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pocket Quest">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>Pocket Quest</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0b0812; overflow: hidden;
-    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  html, body { margin: 0; height: 100%; background: #0b0812; overflow: hidden; overscroll-behavior: none;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+  body { position: fixed; left: 0; top: 0; right: 0; bottom: 0; }
+  /* the game sets the canvas's place and size (js/game.js, resize) */
+  canvas { display: block; position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; outline: none; }
 </style>
 </head>
 <body>
@@ -3167,7 +3177,10 @@ PQ.sound = (function () {
   var musicTimer = null, step = 0, nextTime = 0;
 
   function ensure() {
-    if (ac) { if (ac.state === 'suspended') ac.resume(); return true; }
+    if (ac) {   // a phone can leave it 'suspended' or 'interrupted' (a call, another app): wake it on the next touch
+      if (ac.state !== 'running' && ac.state !== 'closed') { try { var w = ac.resume(); if (w && w.catch) w.catch(function () {}); } catch (e) {} }
+      return true;
+    }
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
     ac = new AC();
@@ -3324,7 +3337,9 @@ PQ.sound = (function () {
     /* Hush has the music: the loop goes silent until the words bring it back */
     hush: function (on) { if (hushed === !!on) return; hushed = !!on; applyMusicLevel(); },
     toggleMusic: function () { musicOn = !musicOn; applyMusicLevel(); return musicOn; },
-    musicOn: function () { return musicOn; }
+    musicOn: function () { return musicOn; },
+    /* the page is hidden (another app, the lock screen): stop every sound until it is back */
+    sleep: function () { if (ac && ac.state === 'running') { try { ac.suspend(); } catch (e) {} } }
   };
 })();
 
@@ -4292,35 +4307,58 @@ PQ.levels = (function () {
   var VW = 480, VH = 270, TS = 16, GY = L.G * TS, T = L.T, INK = PX.INK, GOLD = U.COL.gold;
   var STW = L.STATION_W * TS;
 
-  /* ================================================================ screen */
+  /* ================================================================ screen
+   * Phones and tablets: the canvas is laid over the game's own rectangle, the
+   * biggest one that fits inside the safe area (notch, home bar) of the real
+   * viewport (innerWidth/innerHeight, not 100vh, which a phone's address bar
+   * makes too tall). Its buffer is the frame scaled up by a whole number,
+   * nearest-neighbour; the browser makes the last smooth fit on the GPU. So a
+   * big tablet costs one blit a frame, and the bars around it cost nothing.
+   * A phone held upright shows the "turn your phone" card (drawRotate) and
+   * the game waits until it is turned. */
   var cv = document.getElementById('screen'), ctx = cv.getContext('2d');
   var frame = document.createElement('canvas'); frame.width = VW; frame.height = VH;
   var g = frame.getContext('2d'); g.imageSmoothingEnabled = false;
-  var mid = document.createElement('canvas'), mg = mid.getContext('2d');
-  var SW = 0, SH = 0, S = 1, OX = 0, OY = 0, DPR = 1;
+  var RW = 180, RH = 320;                                   // the upright card
+  var rot = document.createElement('canvas'); rot.width = RW; rot.height = RH;
+  var rg = rot.getContext('2d'); rg.imageSmoothingEnabled = false;
+  var box = { x: 0, y: 0, w: VW, h: VH }, ROTATE = false;
+  var touchFirst = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  var touchAny = touchFirst || (navigator.maxTouchPoints || 0) > 0;
+  var safeProbe = document.createElement('div');
+  safeProbe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+    'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+  document.body.appendChild(safeProbe);
   function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    SW = cv.width = Math.round(window.innerWidth * DPR);
-    SH = cv.height = Math.round(window.innerHeight * DPR);
-    S = Math.min(SW / VW, SH / VH);
-    OX = Math.round((SW - VW * S) / 2); OY = Math.round((SH - VH * S) / 2);
-    var n = Math.max(1, Math.min(6, Math.ceil(S)));
-    if (mid.width !== VW * n) { mid.width = VW * n; mid.height = VH * n; mg = mid.getContext('2d'); }
+    var vw = window.innerWidth, vh = window.innerHeight, dpr = window.devicePixelRatio || 1;
+    var sp = getComputedStyle(safeProbe), il = parseFloat(sp.paddingLeft) || 0, ir = parseFloat(sp.paddingRight) || 0,
+        it = parseFloat(sp.paddingTop) || 0, ib = parseFloat(sp.paddingBottom) || 0;
+    ROTATE = touchAny && vh > vw && vw < 700;               // a phone held upright (a tablet is big enough either way)
+    var w = ROTATE ? RW : VW, h = ROTATE ? RH : VH;
+    var s = Math.max(0.1, Math.min((vw - il - ir) / w, (vh - it - ib) / h));   // CSS px per frame pixel
+    var bw = Math.round(w * s * dpr) / dpr, bh = Math.round(h * s * dpr) / dpr;
+    box = { x: Math.round((il + (vw - il - ir - bw) / 2) * dpr) / dpr, y: Math.round((it + (vh - it - ib - bh) / 2) * dpr) / dpr, w: bw, h: bh };
+    var cs = cv.style; cs.left = box.x + 'px'; cs.top = box.y + 'px'; cs.width = bw + 'px'; cs.height = bh + 'px';
+    var n = Math.max(1, Math.min(6, Math.ceil(s * Math.min(dpr, 3))));   // past 3x the eye sees no more, the memory does
+    if (cv.width !== w * n || cv.height !== h * n) { cv.width = w * n; cv.height = h * n; }
   }
-  window.addEventListener('resize', resize); resize();
+  /* after a turn some phones (iOS) report the new size a moment late */
+  function relayout() { resize(); setTimeout(resize, 150); setTimeout(resize, 500); }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', relayout);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+  document.addEventListener('fullscreenchange', relayout); document.addEventListener('webkitfullscreenchange', relayout);
+  resize();
   function present() {
-    mg.imageSmoothingEnabled = false;
-    mg.drawImage(frame, 0, 0, mid.width, mid.height);
-    ctx.fillStyle = '#0b0812'; ctx.fillRect(0, 0, SW, SH);
-    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(mid, OX, OY, Math.round(VW * S), Math.round(VH * S));
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(ROTATE ? rot : frame, 0, 0, cv.width, cv.height);
   }
 
   /* ================================================================ state */
   var NAMES = { rio: 'Rio', luna: 'Luna', pip: 'Pip', batuhan: 'Batuhan Teacher', mia: 'Mia', max: 'Max',
     bo: 'Bo', bea: 'Bea', twins: 'Bo & Bea', grabbo: 'Grabbo' };
   var G = {
-    mode: 'title', t: 0, heroId: 'rio', titleSel: 0, touch: false,
+    mode: 'title', t: 0, heroId: 'rio', titleSel: 0, touch: touchFirst,
     lvl: null, hero: null, pip: null, cam: { x: 0 }, stars: [], goos: [], stations: [], npcs: [],
     parts: [], bubbles: [], emotes: [], flyers: [], active: null, dialog: null, script: null, choice: null, cutin: null,
     reading: null, whisper: null, photo: null, picture: null, card: null, boss: null, hand: null, portal: null,
@@ -4350,6 +4388,7 @@ PQ.levels = (function () {
     var k = KEYMAP[e.code]; if (!k) return;
     e.preventDefault(); firstGesture();
     if (e.repeat) return;
+    snd.unlock(); G.touch = false;                       // a tablet with a keyboard: the keys win, the touch buttons go
     pressed[k] = true; keys[k] = true;
     if (e.code === 'Space' || e.code === 'Enter') pressed.ok = true;
     if (e.code === 'Enter') pressed.act = true;
@@ -4366,7 +4405,7 @@ PQ.levels = (function () {
       { id: 'jump', x: 450, y: 236, r: 22, label: '▲' }
     ];
   }
-  function toVirtual(e) { return { x: (e.clientX * DPR - OX) / S, y: (e.clientY * DPR - OY) / S }; }
+  function toVirtual(e) { return { x: (e.clientX - box.x) / box.w * VW, y: (e.clientY - box.y) / box.h * VH }; }
   function controlAt(p) {
     if (!G.touch || G.mode !== 'play' || G.script) return null;
     var bs = touchButtons();
@@ -4380,13 +4419,18 @@ PQ.levels = (function () {
     touchHeld.left = touchHeld.right = touchHeld.jump = touchHeld.act = false;
     for (var id in pointers) if (pointers[id]) touchHeld[pointers[id]] = true;
   }
+  /* Some buttons act when the finger lifts (button(..., true)): a phone lets a
+   * page go full screen or open its keyboard only then, not on the touch. */
+  var upTaps = {}, autoFull = false;
+  function inButton(p, b, m) { m = m || 0; return p.x >= b.x - m && p.x <= b.x + b.w + m && p.y >= b.y - m && p.y <= b.y + b.h + m; }
   cv.addEventListener('pointerdown', function (e) {
     e.preventDefault(); firstGesture();
     if (e.pointerType === 'touch') G.touch = true;
+    if (ROTATE) return;                                  // the upright card: it acts on the lift
     var p = toVirtual(e);
     for (var i = uiButtons.length - 1; i >= 0; i--) {
       var b = uiButtons[i];
-      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) { snd.play('blip'); b.tap(); return; }
+      if (inButton(p, b)) { snd.play('blip'); if (b.up) upTaps[e.pointerId] = b; else b.tap(); return; }
     }
     var c = controlAt(p);
     if (c) {
@@ -4401,13 +4445,32 @@ PQ.levels = (function () {
     var c = controlAt(toVirtual(e));
     if (c && c !== pointers[e.pointerId]) { if (c === 'jump') pressed.jump = true; pointers[e.pointerId] = c; syncTouch(); }
   });
-  function endPointer(e) { delete pointers[e.pointerId]; syncTouch(); }
-  cv.addEventListener('pointerup', endPointer); cv.addEventListener('pointercancel', endPointer);
+  function endPointer(e) { delete pointers[e.pointerId]; delete upTaps[e.pointerId]; syncTouch(); }
+  cv.addEventListener('pointerup', function (e) {
+    var b = upTaps[e.pointerId];
+    snd.unlock();                                        // iPhones open the sound on a lift, not on a touch
+    if (ROTATE) { if (canTurn()) enterFullscreen(); }    // Android: full screen turns the phone for us
+    else if (b) { autoFull = true; if (inButton(toVirtual(e), b, 6)) b.tap(); }
+    else if (e.pointerType === 'touch' && !autoFull) {   // the first touch on a phone: full screen, held sideways
+      autoFull = true;
+      if (smallScreen() && canFullscreen() && !isFullscreen()) enterFullscreen();
+    }
+    endPointer(e);
+  });
+  cv.addEventListener('pointercancel', endPointer);
   cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   var gestured = false;
   function firstGesture() { if (gestured) return; gestured = true; snd.unlock(); snd.startMusic(); }
   function held(k) { return !!keys[k] || !!touchHeld[k]; }
-  function button(x, y, w, h, tap) { uiButtons.push({ x: x, y: y, w: w, h: h, tap: tap }); }
+  function button(x, y, w, h, tap, up) { uiButtons.push({ x: x, y: y, w: w, h: h, tap: tap, up: !!up }); }
+  /* another app, the lock screen: silence, and let go of every key and finger */
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      snd.sleep();
+      for (var k in keys) keys[k] = false;
+      pointers = {}; upTaps = {}; syncTouch();
+    } else if (gestured) snd.unlock();
+  });
 
   /* ================================================================ level setup */
   var HERO_H = 42, HERO_W = 12;
@@ -6384,21 +6447,31 @@ PQ.levels = (function () {
    * cannot (an iPhone) simply do not show it. */
   function canFullscreen() { var d = document.documentElement; return !!(d.requestFullscreen || d.webkitRequestFullscreen); }
   function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
-  function toggleFullscreen() {
+  function enterFullscreen() {
+    autoFull = true;
     try {
-      if (isFullscreen()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
       var d = document.documentElement, p = (d.requestFullscreen || d.webkitRequestFullscreen).call(d);
-      var lock = function () { try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (e) {} };
+      var lock = function () { try { if (screen.orientation && screen.orientation.lock) { var l = screen.orientation.lock('landscape'); if (l && l.catch) l.catch(function () {}); } } catch (e) {} };
       if (p && p.then) p.then(lock).catch(function () {}); else lock();
     } catch (e) {}
   }
+  function toggleFullscreen() {
+    try {
+      if (isFullscreen()) { autoFull = true; (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    } catch (e) { return; }
+    enterFullscreen();
+  }
+  /** a phone, not a tablet: its short side is under 600 CSS px */
+  function smallScreen() { return Math.min(screen.width || 9999, screen.height || 9999) < 600; }
+  /** can the page turn the phone itself? (Android: full screen, then lock sideways; an iPhone cannot) */
+  function canTurn() { return canFullscreen() && !!(screen.orientation && screen.orientation.lock); }
   var FS_ICON = ['kk....kk', 'k......k', '........', '........', '........', '........', 'k......k', 'kk....kk'];
   var FS_OFF = ['.k....k.', 'kk....kk', '........', '........', '........', '........', 'kk....kk', '.k....k.'];
   function fullscreenButton(bx, by) {
     if (!canFullscreen()) return;
     U.rect(g, INK, bx + 1, by, 15, 17); U.rect(g, INK, bx, by + 1, 17, 15); U.rect(g, GOLD, bx + 1, by + 1, 15, 15); U.rect(g, U.COL.goldHi, bx + 2, by + 1, 13, 1);
     U.icon(g, isFullscreen() ? FS_OFF : FS_ICON, bx + 5, by + 4, { k: INK });
-    button(bx - 2, by - 2, 21, 21, toggleFullscreen);
+    button(bx - 2, by - 2, 21, 21, toggleFullscreen, true);
   }
   function drawTip() {
     if (!G.tip || G.script) return;
@@ -6863,7 +6936,7 @@ PQ.levels = (function () {
     if (C2.typing && Math.floor(t * 2.5) % 2) U.rect(g, INK, bx + 7 + (C2.name ? nw : 0), ry + 2, 1, 11);
     F.draw(g, '.', bx + bw + 3, ry + 3, { color: '#ffffff' });
     if (!C2.typing && C2.row === 0) F.draw(g, G.touch ? 'tap' : 'E', bx + bw - 8, ry + 4, { color: '#a9a0c8', bold: false, align: 'right' });
-    button(bx, ry - 1, bw, 17, function () { if (G.create) { G.create.row = 0; if (G.create.typing) stopTyping(); else startTyping(); } });
+    button(bx, ry - 1, bw, 17, function () { if (G.create) { G.create.row = 0; if (G.create.typing) stopTyping(); else startTyping(); } }, true);
     ry += 23;
     // the looks
     LOOK_ROWS.forEach(function (R2, i) {
@@ -7035,11 +7108,53 @@ PQ.levels = (function () {
     present();
   }
 
+  /* ---- a phone held upright: the game waits on a card of its own, Pip
+   * says "Turn your phone!" and a phone turns sideways. On Android a tap
+   * goes full screen and turns it for you. */
+  var phoneIcon = null;
+  function drawRotate(t) {
+    var c = rg, cx = RW / 2;
+    var sky = c.createLinearGradient(0, 0, 0, RH); sky.addColorStop(0, '#3a2b6e'); sky.addColorStop(1, '#0b0812');
+    c.fillStyle = sky; c.fillRect(0, 0, RW, RH);
+    for (var i = 0; i < 18; i++) {                         // a few twinkling stars
+      var sx = (i * 97) % RW, sy = (i * 53) % 150 + 6;
+      c.globalAlpha = 0.35 + 0.35 * Math.sin(t * 2 + i); U.rect(c, '#fff1a6', sx, sy, 1, 1);
+    }
+    c.globalAlpha = 1;
+    var l1 = logoCache('rot1', function () { return F.logo('POCKET', { scale: 3, depth: 4 }); });
+    var l2 = logoCache('rot2', function () { return F.logo('QUEST', { scale: 3, depth: 4 }); });
+    c.drawImage(l1, Math.round(cx - l1.width / 2), 20); c.drawImage(l2, Math.round(cx - l2.width / 2), 20 + l1.height - 2);
+    if (!phoneIcon) {                                      // a little phone, drawn once
+      phoneIcon = document.createElement('canvas'); phoneIcon.width = 30; phoneIcon.height = 50;
+      var p = phoneIcon.getContext('2d');
+      U.rect(p, INK, 1, 0, 28, 50); U.rect(p, INK, 0, 1, 30, 48);
+      U.rect(p, U.COL.gold, 2, 2, 26, 46); U.rect(p, U.COL.goldHi, 3, 2, 24, 1);
+      U.rect(p, '#5bb6f5', 4, 6, 22, 36); U.rect(p, '#a8e4ff', 4, 6, 22, 2); U.rect(p, '#7ee07a', 4, 34, 22, 8);
+      U.rect(p, U.COL.goldDeep, 12, 44, 6, 2);
+    }
+    var k = (t % 2.8) / 2.8, turn = Math.min(1, Math.max(0, (k - 0.25) / 0.3));
+    turn = turn * turn * (3 - 2 * turn);                   // ease in and out
+    var a = -Math.PI / 2 * turn, py = 150;
+    c.globalAlpha = k > 0.88 ? Math.max(0, 1 - (k - 0.88) / 0.12) : 1;
+    c.save(); c.translate(cx, py); c.rotate(a); c.drawImage(phoneIcon, -15, -25); c.restore();
+    c.globalAlpha = 1;
+    for (var d = 0; d < 7; d++) {                          // the turning arrow, a dotted arc
+      var an = -Math.PI * 0.95 + d * 0.13;
+      if (d / 7 < turn + 0.15) U.rect(c, '#fff1a6', Math.round(cx + Math.cos(an) * 38), Math.round(py + Math.sin(an) * 38), 2, 2);
+    }
+    var pip = CH.get('pip', Math.floor(t * 6) % 2 ? 'flap' : 'rest', 'happy', 1);
+    c.drawImage(pip, 22, 196 + Math.round(Math.sin(t * 3) * 2));
+    U.panel(c, 10, 228, RW - 20, canTurn() ? 44 : 30);
+    F.draw(c, 'Turn your phone!', cx, 238, { color: U.COL.gold, align: 'center' });
+    if (canTurn() && Math.floor(t * 2) % 2 === 0) F.draw(c, 'or tap here', cx, 253, { color: '#ffffff', bold: false, align: 'center' });
+  }
+
   /* ================================================================ loop */
   var last = 0, accum = 0, STEP = 1 / 60, paused = false;
   function loop(ts) {
     requestAnimationFrame(loop);
     if (paused) return;
+    if (ROTATE) { last = ts; accum = 0; drawRotate(ts / 1000); present(); return; }   // upright: the game waits
     var dt = Math.min(0.1, (ts - last) / 1000 || 0); last = ts; accum += dt;
     while (accum >= STEP) { update(STEP); accum -= STEP; }
     render();
