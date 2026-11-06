@@ -1849,8 +1849,8 @@ PQ.world = (function () {
     rect(g, haze('#a5df6a', 0.5), 0, 196, LW, 1);
   }
   /* the park line: a hedge, round trees, poplars and two in blossom, and the
-   * school's playground in it (swings, a slide, a climbing dome) with the
-   * school flag */
+   * school's playground in it (swings, a slide, a climbing dome, a seesaw, a
+   * sandbox) with the school flag */
   function swingFrame(g, x, base, k) {
     var f = function (c) { return haze(c, k); };
     [x, x + 46].forEach(function (lx) {
@@ -1884,8 +1884,17 @@ PQ.world = (function () {
     }
     for (var h = 1; h < 3; h++) { var hy = base - h * 10, hw = Math.round(Math.sqrt(1 - Math.pow(h * 10 / 30, 2)) * 30); rect(g, f(INK), cx - hw, hy - 1, hw * 2, 3); rect(g, f('#ff9d3a'), cx - hw, hy, hw * 2, 1); }
   }
-
-
+  function seesaw(g, cx, base, k) {
+    var f = function (c) { return haze(c, k); };
+    rect(g, f(INK), cx - 4, base - 9, 9, 9); rect(g, f('#9b5de5'), cx - 3, base - 8, 7, 8);
+    for (var i = -26; i <= 26; i++) { var y = Math.round(base - 11 - i * 0.18); rect(g, f(INK), cx + i, y - 1, 1, 4); rect(g, f('#ffd64a'), cx + i, y, 1, 2); }
+    [-24, 22].forEach(function (q) { var y = Math.round(base - 11 - q * 0.18); rect(g, f(INK), cx + q, y - 6, 3, 6); });
+  }
+  function sandbox(g, x, base, k) {
+    var f = function (c) { return haze(c, k); };
+    rect(g, f(INK), x, base - 6, 44, 6); rect(g, f('#c98a54'), x + 1, base - 5, 42, 4); rect(g, f('#f2d58a'), x + 3, base - 6, 38, 2);
+    rect(g, f(INK), x + 28, base - 11, 7, 6); rect(g, f('#e04848'), x + 29, base - 10, 5, 4);   // a bucket
+  }
   var SWINGS = [158, 186], FLAG = 762, PARK_K = 0.18;
   function buildPark() {
     parkCv = canvas(LW, H); var g = parkCv.getContext('2d');
@@ -1896,7 +1905,7 @@ PQ.world = (function () {
     }
     [[40, 'round', 24, LEAF_MID], [104, 'poplar', 16, LEAF_MID], [236, 'round', 19, BLOSSOM_MID], [420, 'poplar', 18, LEAF_MID], [470, 'round', 26, LEAF_MID],
      [640, 'round', 21, LEAF_MID], [716, 'poplar', 15, LEAF_MID], [800, 'round', 19, BLOSSOM_MID], [920, 'round', 25, LEAF_MID]].forEach(function (t) { parkTree(g, t[0], 214, t[2], t[3], t[1]); });
-    swingFrame(g, 150, 214, PARK_K); slide(g, 300, 214, PARK_K); dome(g, 560, 214, PARK_K);   // (no seesaw or sandbox: over a pit they looked like something to stand on)
+    swingFrame(g, 150, 214, PARK_K); slide(g, 300, 214, PARK_K); dome(g, 560, 214, PARK_K); seesaw(g, 860, 214, PARK_K); sandbox(g, 600, 214, PARK_K);
     rect(g, haze(INK, PARK_K), FLAG - 2, 128, 3, 86); rect(g, haze('#c8cce0', PARK_K), FLAG - 1, 128, 1, 86); rect(g, haze('#ffd64a', PARK_K), FLAG - 3, 125, 5, 3);   // the flagpole
   }
   /** what moves in the park: a swing (one child on it, one empty) and the flag */
@@ -2533,308 +2542,97 @@ PQ.scenery = (function () {
       if (rightEnd) rect(g, INK, x + 16, y - 1, 1, 7);
       return;
     }
-    // a wooden platform on posts (a playground climbing deck); over a pit it floats, with iron caps
-    var gt0 = topAt(cc), floating = !(gt0 >= 0 && gt0 > r);
-    if (!floating) [leftEnd ? x + 2 : -99, rightEnd ? x + 11 : -99].forEach(function (px2) {
+    // a wooden platform on posts (a playground climbing deck)
+    [leftEnd ? x + 2 : -99, rightEnd ? x + 11 : -99].forEach(function (px2) {
       if (px2 < -50) return;
-      var bottom = gt0 * TS;
+      var gt = topAt(cc), bottom = gt >= 0 && gt > r ? gt * TS : H;
       rect(g, INK, px2 - 1, y + 6, 5, bottom - y - 6); rect(g, WOOD[3], px2, y + 6, 3, bottom - y - 6); rect(g, WOOD[2], px2, y + 6, 1, bottom - y - 6);
     });
     rect(g, INK, x, y - 1, 16, 8);
     rect(g, WOOD[0], x, y, 16, 1); rect(g, WOOD[1], x, y + 1, 16, 3); rect(g, WOOD[2], x, y + 4, 16, 1); rect(g, WOOD[3], x, y + 5, 16, 1);
     rect(g, WOOD[3], x + ((cc * 7) % 10) + 3, y + 2, 1, 2);
-    if (floating) {
-      if (leftEnd) { rect(g, '#5a5478', x, y, 5, 6); rect(g, '#8a84a8', x, y, 5, 1); rect(g, '#2b2648', x + 2, y + 2, 1, 2); }
-      if (rightEnd) { rect(g, '#5a5478', x + 11, y, 5, 6); rect(g, '#8a84a8', x + 11, y, 5, 1); rect(g, '#2b2648', x + 13, y + 2, 1, 2); }
-      rect(g, 'rgba(10,6,20,0.25)', x + 2, y + 8, 16, 2);
-    }
     if (leftEnd) rect(g, INK, x - 1, y - 1, 1, 8);
     if (rightEnd) rect(g, INK, x + 16, y - 1, 1, 8);
   }
 
-  /* ------------------------------------------------------------ the classroom
-   * A wall twice a screen wide (parallax 0.5), so nothing repeats soon:
-   * ceiling lights, the alphabet with numbers and shapes, three windows with
-   * blinds and radiators, the WORD WALL (the unit's words with the things
-   * themselves), a map, the class board, a clock, a calendar, the rules,
-   * backpacks on hooks. In front of it (parallax 0.75) the back of the room:
-   * desks, cubbies, a fish tank, a bookshelf and a globe, an easel, a coat
-   * rack, bins. After the play layer: sunbeams with dust in them, patches of
-   * sun on the floor, and dark chair backs and a plant in front. */
-  var CLW = 960, CGY = 224;
-  function cdisc(g, x, y, r, c) { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
-  function frameBox(g, x, y, w, h, wood) {   // an ink edge, a wooden frame; returns the inside
-    rect(g, INK, x, y, w, h); rect(g, wood || '#a8693e', x + 1, y + 1, w - 2, h - 2); rect(g, '#d9a066', x + 1, y + 1, w - 2, 1); rect(g, '#7a4a2e', x + 1, y + h - 2, w - 2, 1);
-    return { x: x + 3, y: y + 3, w: w - 6, h: h - 6 };
-  }
-  function ctiled(g, layer, camX, k) { var w = layer.width, off = -Math.round((camX * k) % w); if (off > 0) off -= w; for (var x = off; x < W; x += w) g.drawImage(layer, x, 0); }
-  var WINDOWS = [40, 504, 832], WW = 96, WY = 50, WH = 86;
-
-  function windowView(g, x, y, w, h, seed) {
-    var sky = ['#58a2f4', '#68aef6', '#7abaf7', '#8dc5f8', '#a2d0f8', '#b7dbf7', '#cde5f5'];
-    for (var b = 0; b < sky.length; b++) rect(g, sky[b], x, y + Math.round(b * h / sky.length), w, Math.ceil(h / sky.length) + 1);
-    [[0.22, 0.2, 9], [0.34, 0.15, 12], [0.48, 0.21, 8]].forEach(function (q) { g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(x + w * q[0] + seed * 7 % 20, y + h * q[1] + 6, q[2], q[2] * 0.55, 0, 0, 7); g.fill(); });
-    rect(g, '#b4c8ec', x, y + h - 30, w, 6);                                     // far hills
-    for (var i = 0; i < w; i += 2) rect(g, '#a6c0e6', x + i, y + h - 30 - Math.round(3 + 3 * Math.sin((i + seed * 30) * 0.12)), 2, 6);
-    rect(g, '#9fd27a', x, y + h - 24, w, 24); rect(g, '#7cbf5c', x, y + h - 12, w, 12);
-    rect(g, '#c8b48a', x + Math.round(w * 0.1), y + h - 10, Math.round(w * 0.5), 3);   // a path across the yard
-    var tx = x + w - 22 - (seed % 2) * 40;
-    cdisc(g, tx, y + h - 34, 13, '#3b8a3e'); cdisc(g, tx - 2, y + h - 36, 11, '#5fb544'); cdisc(g, tx + 3, y + h - 40, 6, '#7ed35c');
-    rect(g, '#8f5f3d', tx - 1, y + h - 24, 3, 9);
-    if (seed % 2 === 0) { rect(g, '#e0604f', x + 18, y + h - 30, 22, 2); rect(g, '#e0604f', x + 20, y + h - 30, 1, 10); rect(g, '#e0604f', x + 37, y + h - 30, 1, 10); }   // the swings outside
-  }
-  function classWindow(g, x, y, w, h, seed) {
-    rect(g, INK, x - 4, y - 4, w + 8, h + 8); rect(g, '#f4f1ff', x - 3, y - 3, w + 6, h + 6); rect(g, '#d8d2ef', x - 3, y + h + 2, w + 6, 1);
-    windowView(g, x, y, w, h, seed);
-    rect(g, '#f4f1ff', x + w / 2 - 2, y, 4, h); rect(g, '#f4f1ff', x, y + h / 2 - 1, w, 3);
-    rect(g, 'rgba(255,255,255,0.55)', x + 5, y + 5, 12, 2); rect(g, 'rgba(255,255,255,0.55)', x + 5, y + 7, 2, 9);
-    var down = 14 + (seed * 9) % 12;                                              // the blinds, partly down
-    for (var s = 0; s < down; s += 3) { rect(g, '#ede7d6', x, y + s, w, 2); rect(g, '#c9bfa6', x, y + s + 2, w, 1); }
-    rect(g, INK, x - 1, y + down, w + 2, 2); rect(g, '#bdb39a', x, y + down, w, 1);
-    rect(g, '#bdb39a', x + w - 8, y + down + 2, 1, 22); rect(g, '#8a7c62', x + w - 9, y + down + 24, 3, 3);
-    rect(g, INK, x - 9, y + h + 5, w + 18, 6); rect(g, '#e8c48e', x - 8, y + h + 6, w + 16, 3); rect(g, '#fff0d0', x - 8, y + h + 6, w + 16, 1);   // the sill
-    [[x + 8, '#d9643a', '#57cc99'], [x + w - 24, '#3a86ff', '#ffc93c']].forEach(function (q, i) {        // pots on it
-      rect(g, INK, q[0], y + h - 5, 14, 11); rect(g, q[1], q[0] + 1, y + h - 4, 12, 9); rect(g, PX.mix(q[1], '#ffffff', 0.35), q[0] + 1, y + h - 4, 12, 2);
-      if (i === 0) [[q[0] + 3, y + h - 13, 5], [q[0] + 10, y + h - 15, 6], [q[0] + 7, y + h - 19, 4]].forEach(function (l) { cdisc(g, l[0], l[1], l[2] + 1, '#2c7a42'); cdisc(g, l[0], l[1], l[2], '#66cb5b'); });
-      else { rect(g, '#2c7a42', q[0] + 6, y + h - 16, 2, 12); cdisc(g, q[0] + 7, y + h - 18, 5, INK); cdisc(g, q[0] + 7, y + h - 18, 4, q[2]); cdisc(g, q[0] + 7, y + h - 18, 1.5, '#e07a28'); }
-    });
-    // a radiator under the window
-    var ry = 166, rw = w - 10, rx = x + 5;
-    rect(g, INK, rx, ry, rw, 34); rect(g, '#f2f0f8', rx + 1, ry + 1, rw - 2, 32);
-    for (var f = rx + 4; f < rx + rw - 3; f += 5) { rect(g, '#cfcade', f, ry + 3, 2, 28); rect(g, '#ffffff', f - 1, ry + 3, 1, 28); }
-    rect(g, INK, rx + 4, ry + 34, 3, 6); rect(g, INK, rx + rw - 7, ry + 34, 3, 6);
-  }
-  /* the word wall: the unit's words on cards, each with the thing itself */
-  function wordWall(g, x, y) {
-    var w = 186, h = 86, i = frameBox(g, x, y, w, h);
-    rect(g, '#3f6fc4', i.x, i.y, i.w, i.h); rect(g, '#5b8bd9', i.x, i.y, i.w, 1);
-    for (var d = 0; d < 50; d++) rect(g, '#4a7ad0', i.x + hash(d * 5 + 2) * i.w, i.y + hash(d * 9 + 4) * i.h, 2, 1);
-    var tw = F.measure('WORD WALL', true) + 12, tx = Math.round(x + w / 2 - tw / 2);
-    rect(g, INK, tx, y - 4, tw, 14); rect(g, '#ffd64a', tx + 1, y - 3, tw - 2, 12); rect(g, '#fff1a6', tx + 1, y - 3, tw - 2, 1);
-    F.draw(g, 'WORD WALL', x + w / 2, y - 3, { color: INK, align: 'center', bold: true });
-    var words = ['book', 'pencil', 'ruler', 'eraser', 'bag', 'crayon', 'cap', 'ball', 'apple'], tops = ['#e04848', '#ffc93c', '#57cc99', '#ff8fab', '#3a86ff', '#9b5de5', '#ff9d3a', '#3fa7ff', '#e04848'];
-    words.forEach(function (wd, k) {
-      var cx = i.x + 1 + (k % 3) * 60, cy = i.y + 13 + Math.floor(k / 3) * 22;
-      rect(g, INK, cx, cy, 58, 20); rect(g, '#ffffff', cx + 1, cy + 1, 56, 18); rect(g, tops[k], cx + 1, cy + 1, 56, 2);
-      var it = PQ.chars2.item(wd, false, 1, 1.0), sc = Math.min(14 / it.width, 13 / it.height, 1);
-      g.imageSmoothingEnabled = false;
-      g.drawImage(it, Math.round(cx + 9 - it.width * sc / 2), Math.round(cy + 11 - it.height * sc / 2), Math.round(it.width * sc), Math.round(it.height * sc));
-      F.draw(g, wd, cx + 17, cy + 5, { color: '#2b2350', bold: false });
-    });
-  }
-  function worldMap(g, x, y) {
-    var w = 64, h = 46;
-    rect(g, INK, x, y, w, h); rect(g, '#f4f1ff', x + 1, y + 1, w - 2, h - 2);
-    rect(g, '#7cc4f2', x + 3, y + 3, w - 6, h - 6); rect(g, '#9ad4f6', x + 3, y + 3, w - 6, 2);
-    [[x + 14, y + 16, 8, 6], [x + 18, y + 30, 5, 7], [x + 34, y + 14, 6, 4], [x + 36, y + 26, 6, 8], [x + 50, y + 18, 9, 7], [x + 52, y + 34, 5, 3]].forEach(function (c, i) {
-      g.fillStyle = ['#7ed35c', '#e6c86a', '#5fb544'][i % 3]; g.beginPath(); g.ellipse(c[0], c[1], c[2], c[3], 0, 0, 7); g.fill();
-    });
-    rect(g, '#e04848', x + 39, y + 15, 2, 2); rect(g, INK, x + 39, y + 17, 1, 3);       // a pin: we are here
-    rect(g, INK, x + w / 2 - 1, y - 4, 2, 4);
-  }
-  function classBoard(g, x, y) {
-    var w = 120, h = 70;
-    var i = frameBox(g, x, y, w, h, '#8a5a34');
-    rect(g, '#d9a066', i.x, i.y, i.w, i.h);
-    for (var d = 0; d < 60; d++) rect(g, '#c98a54', i.x + hash(d * 3 + 5) * i.w, i.y + hash(d * 7 + 1) * i.h, 1, 1);
-    var cols = ['#e04848', '#ffc93c', '#3a86ff', '#57cc99', '#9b5de5', '#ff9d3a', '#ff8fab', '#3a86ff', '#e04848'];
-    'OUR CLASS'.split('').forEach(function (ch, k) {
-      if (ch === ' ') return;
-      var cx = i.x + 12 + k * 11;
-      rect(g, INK, cx - 1, i.y + 2, 11, 12); rect(g, cols[k], cx, i.y + 3, 9, 10); F.draw(g, ch, cx + 5, i.y + 3, { color: '#ffffff', align: 'center', bold: true });
-    });
-    [[i.x + 6, i.y + 20, '#fff6e0', 0], [i.x + 42, i.y + 18, '#e3f4ff', 1], [i.x + 80, i.y + 21, '#fff1f6', 2], [i.x + 22, i.y + 42, '#f0ffe6', 3], [i.x + 62, i.y + 42, '#fffbe0', 4]].forEach(function (q) {
-      var px = q[0], py = q[1];
-      rect(g, INK, px - 1, py - 1, 30, 21); rect(g, q[2], px, py, 28, 19); rect(g, '#e04848', px + 12, py - 2, 4, 3);
-      if (q[3] === 0) { cdisc(g, px + 8, py + 7, 4, '#ffc93c'); rect(g, '#57cc99', px, py + 14, 28, 5); }
-      if (q[3] === 1) { rect(g, '#e04848', px + 7, py + 7, 13, 8); rect(g, '#3a86ff', px + 5, py + 3, 17, 4); rect(g, '#ffc93c', px + 12, py + 10, 3, 5); }
-      if (q[3] === 2) { cdisc(g, px + 10, py + 9, 4, '#ff8fab'); cdisc(g, px + 17, py + 9, 4, '#ff8fab'); rect(g, '#ff8fab', px + 10, py + 9, 8, 5); }
-      if (q[3] === 3) { rect(g, '#9b5de5', px + 5, py + 6, 5, 10); rect(g, '#3a86ff', px + 12, py + 4, 5, 12); rect(g, '#ff9d3a', px + 19, py + 8, 5, 8); }
-      if (q[3] === 4) { cdisc(g, px + 14, py + 8, 5, '#ffd6a8'); rect(g, INK, px + 12, py + 7, 1, 1); rect(g, INK, px + 16, py + 7, 1, 1); rect(g, INK, px + 12, py + 10, 5, 1); rect(g, '#6b4226', px + 9, py + 2, 11, 3); }
-    });
-  }
-  function calendar(g, x, y) {
-    rect(g, INK, x, y, 40, 46); rect(g, '#ffffff', x + 1, y + 1, 38, 44); rect(g, '#e04848', x + 1, y + 1, 38, 10);
-    F.draw(g, 'NOV', x + 20, y + 1, { color: '#ffffff', align: 'center', bold: true });
-    for (var r = 0; r < 5; r++) for (var c = 0; c < 6; c++) rect(g, r === 1 && c === 3 ? '#ffd64a' : '#dcd6ec', x + 4 + c * 6, y + 15 + r * 6, 4, 4);
-    g.strokeStyle = '#e04848'; g.lineWidth = 1; g.beginPath(); g.arc(x + 24, y + 23, 4, 0, 7); g.stroke();
-    rect(g, INK, x + 9, y - 3, 2, 5); rect(g, INK, x + 29, y - 3, 2, 5);
-  }
-  function rules(g, x, y) {
-    rect(g, INK, x, y, 48, 58); rect(g, '#fff6e0', x + 1, y + 1, 46, 56); rect(g, '#57cc99', x + 1, y + 1, 46, 11);
-    F.draw(g, 'RULES', x + 24, y + 2, { color: '#ffffff', align: 'center', bold: true });
-    ['Listen', 'Share', 'Be kind'].forEach(function (t, i) {
-      rect(g, ['#e04848', '#3a86ff', '#ff9d3a'][i], x + 4, y + 18 + i * 13, 3, 3);
-      F.draw(g, t, x + 10, y + 14 + i * 13, { color: '#4a3f60', bold: false });
-    });
-  }
-  function clock(g, cx, cy) {
-    cdisc(g, cx, cy, 13, INK); cdisc(g, cx, cy, 12, '#e04848'); cdisc(g, cx, cy, 10, '#ffffff');
-    for (var q = 0; q < 12; q++) { var a = q / 12 * Math.PI * 2; rect(g, '#8a7c70', Math.round(cx + Math.sin(a) * 8), Math.round(cy - Math.cos(a) * 8), 1, 1); }
-    rect(g, INK, cx, cy - 7, 1, 8); rect(g, INK, cx, cy, 5, 1); rect(g, INK, cx - 1, cy - 1, 2, 2);
-  }
-  function backpackHook(g, x, y, col) {
-    rect(g, INK, x + 6, y - 6, 3, 6); rect(g, '#8a8aa0', x + 7, y - 6, 1, 5);
-    rect(g, INK, x, y, 16, 20); rect(g, col, x + 1, y + 1, 14, 18); rect(g, PX.mix(col, '#ffffff', 0.35), x + 1, y + 1, 14, 2);
-    rect(g, INK, x + 3, y + 9, 10, 7); rect(g, PX.mix(col, '#000000', 0.2), x + 4, y + 10, 8, 5); rect(g, '#ffd64a', x + 7, y + 10, 2, 1);
-  }
-  var classBack, classMid;
-  function buildClassBack() {
-    var c = canvas(CLW, H), g = c.getContext('2d');
-    rect(g, '#f6e3bd', 0, 0, CLW, H);
-    for (var x = 0; x < CLW; x += 6) rect(g, '#efd6aa', x, 0, 2, 150);
-    // the ceiling and its lights
-    rect(g, '#ece6f6', 0, 0, CLW, 10); for (var cx = 0; cx < CLW; cx += 24) rect(g, '#d8d0ea', cx, 0, 1, 10); rect(g, '#cfc6e2', 0, 9, CLW, 1);
-    rect(g, '#7a4a2e', 0, 10, CLW, 2); rect(g, '#c98a4b', 0, 12, CLW, 3); rect(g, '#f1c38e', 0, 12, CLW, 1); rect(g, '#8a5a34', 0, 15, CLW, 1);
-    for (var lx = 60; lx < CLW; lx += 160) { rect(g, INK, lx - 22, 2, 44, 7); rect(g, '#f4f2fb', lx - 21, 3, 42, 4); rect(g, '#ffffff', lx - 21, 7, 42, 1); }
-    // the alphabet, then numbers and shapes
+  /* ------------------------------------------------------------ the classroom */
+  var wallCv;
+  function buildWall() {
+    wallCv = canvas(W, H); var g = wallCv.getContext('2d');
+    rect(g, '#f6e3bd', 0, 0, W, H);
+    for (var x = 0; x < W; x += 6) rect(g, '#efd6aa', x, 0, 2, 150);
+    rect(g, '#7a4a2e', 0, 0, W, 7); rect(g, '#c98a4b', 0, 7, W, 2); rect(g, '#a8693e', 0, 9, W, 1);
+    // the alphabet along the top
     var cols = ['#ff5f7a', '#ffc93c', '#3fa7ff', '#57cc99', '#9b5de5', '#ff9d3a'];
-    for (var i = 0; i < 52; i++) {
-      var ax = 6 + i * 18, lab = i < 26 ? String.fromCharCode(65 + i) : i < 36 ? String(i - 26) : null, col = cols[i % 6];
-      rect(g, INK, ax, 20, 15, 16); rect(g, col, ax + 1, 21, 13, 14); rect(g, '#ffffff', ax + 1, 21, 13, 1);
-      if (lab !== null) F.draw(g, lab, ax + 8, 23, { color: '#ffffff', align: 'center', outline: PX.mix(col, '#000000', 0.45) });
-      else {   // shapes: circle, square, triangle, star
-        var s = (i - 36) % 4, mx = ax + 7, my = 28;
-        if (s === 0) cdisc(g, mx + 0.5, my, 4, '#ffffff');
-        if (s === 1) rect(g, '#ffffff', mx - 3, my - 3, 7, 7);
-        if (s === 2) for (var tr = 0; tr < 6; tr++) rect(g, '#ffffff', mx - tr * 0.6, my - 3 + tr, tr * 1.2 + 1, 1);
-        if (s === 3) { rect(g, '#ffffff', mx, my - 4, 1, 9); rect(g, '#ffffff', mx - 4, my - 1, 9, 2); rect(g, '#ffffff', mx - 2, my - 2, 5, 5); }
-      }
+    for (var i = 0; i < 26; i++) {
+      var cx = 6 + i * 18;
+      rect(g, INK, cx, 14, 15, 16); rect(g, cols[i % 6], cx + 1, 15, 13, 14); rect(g, '#ffffff', cx + 1, 15, 13, 1);
+      F.draw(g, String.fromCharCode(65 + i), cx + 8, 17, { color: '#ffffff', align: 'center', outline: PX.mix(cols[i % 6], '#000000', 0.45) });
     }
-    WINDOWS.forEach(function (wx, k) { classWindow(g, wx, WY, WW, WH, k + 1); });
-    clock(g, 170, 62);
-    calendar(g, 150, 84);
-    wordWall(g, 214, 46);
-    worldMap(g, 420, 58);
-    classBoard(g, 626, 50);
-    rules(g, 764, 64);
-    backpackHook(g, 944, 98, '#e04848'); backpackHook(g, 4, 102, '#3a86ff'); rect(g, INK, 940, 90, 20, 3); rect(g, INK, 0, 90, 24, 3);
-    // the chair rail and the blue wainscot
-    rect(g, INK, 0, 149, CLW, 1); rect(g, '#c98a4b', 0, 150, CLW, 4); rect(g, '#f1c38e', 0, 150, CLW, 1); rect(g, '#8a5a34', 0, 154, CLW, 1);
-    rect(g, '#5b8bd9', 0, 155, CLW, H - 155);
-    for (var p = 0; p < CLW; p += 60) { rect(g, '#3f6fc4', p + 6, 162, 48, 56); rect(g, '#6f9be3', p + 7, 163, 46, 54); rect(g, '#5b8bd9', p + 8, 164, 44, 52); rect(g, '#86aef0', p + 8, 164, 44, 1); }
-    WINDOWS.forEach(function (wx, k) {   // radiators go over the wainscot: draw them again on top
-      var ry = 166, rw = WW - 10, rx = wx + 5;
-      rect(g, INK, rx, ry, rw, 34); rect(g, '#f2f0f8', rx + 1, ry + 1, rw - 2, 32);
-      for (var f = rx + 4; f < rx + rw - 3; f += 5) { rect(g, '#cfcade', f, ry + 3, 2, 28); rect(g, '#ffffff', f - 1, ry + 3, 1, 28); }
-      rect(g, INK, rx + 4, ry + 34, 3, 6); rect(g, INK, rx + rw - 7, ry + 34, 3, 6);
+    // two big windows onto the morning
+    [22, 352].forEach(function (wx) {
+      var wy = 44, ww = 106, wh = 80;
+      rect(g, INK, wx - 4, wy - 4, ww + 8, wh + 8); rect(g, '#a8693e', wx - 3, wy - 3, ww + 6, wh + 6); rect(g, '#c98a4b', wx - 3, wy - 3, ww + 6, 1);
+      var sky = ['#58a2f4', '#68aef6', '#7abaf7', '#8dc5f8', '#a2d0f8', '#b7dbf7'];
+      for (var b = 0; b < 6; b++) rect(g, sky[b], wx, wy + b * Math.ceil(wh / 6), ww, Math.ceil(wh / 6));
+      // a cloud, hills and a tree outside
+      [[wx + 18, wy + 18, 10], [wx + 30, wy + 14, 13], [wx + 44, wy + 19, 9]].forEach(function (q) {
+        g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(q[0], q[1], q[2], q[2] * 0.6, 0, 0, 7); g.fill();
+      });
+      rect(g, '#9fd27a', wx, wy + wh - 18, ww, 18); rect(g, '#7cbf5c', wx, wy + wh - 10, ww, 10);
+      g.fillStyle = '#5fb544'; g.beginPath(); g.ellipse(wx + ww - 24, wy + wh - 26, 14, 12, 0, 0, 7); g.fill();
+      rect(g, '#8f5f3d', wx + ww - 25, wy + wh - 16, 3, 8);
+      // frame bars and the glint
+      rect(g, '#a8693e', wx + ww / 2 - 2, wy, 4, wh); rect(g, '#a8693e', wx, wy + wh / 2 - 2, ww, 4);
+      rect(g, 'rgba(255,255,255,0.55)', wx + 6, wy + 6, 12, 2); rect(g, 'rgba(255,255,255,0.55)', wx + 6, wy + 8, 2, 8);
+      // sill with a potted plant
+      rect(g, INK, wx - 8, wy + wh + 4, ww + 16, 6); rect(g, '#e8c48e', wx - 7, wy + wh + 5, ww + 14, 3); rect(g, '#fff0d0', wx - 7, wy + wh + 5, ww + 14, 1);
+      rect(g, INK, wx + 10, wy + wh - 6, 14, 11); rect(g, '#d9643a', wx + 11, wy + wh - 5, 12, 9); rect(g, '#f08a5a', wx + 11, wy + wh - 5, 12, 2);
+      [[wx + 13, wy + wh - 14, 5], [wx + 20, wy + wh - 16, 6], [wx + 17, wy + wh - 20, 4]].forEach(function (q) {
+        g.fillStyle = '#2c7a42'; g.beginPath(); g.arc(q[0], q[1], q[2] + 1, 0, 7); g.fill();
+        g.fillStyle = '#66cb5b'; g.beginPath(); g.arc(q[0], q[1], q[2], 0, 7); g.fill();
+      });
     });
-    rect(g, '#3a2418', 0, CGY - 6, CLW, 6); rect(g, '#6b4226', 0, CGY - 6, CLW, 1);   // the skirting board
-    // the room's air: a little darker under the ceiling
-    var ag = g.createLinearGradient(0, 0, 0, 60); ag.addColorStop(0, 'rgba(60,30,20,0.16)'); ag.addColorStop(1, 'rgba(60,30,20,0)'); g.fillStyle = ag; g.fillRect(0, 0, CLW, 60);
-    classBack = c;
-  }
-  /* the back of the room */
-  function backDesk(g, x, chair) {
-    var top = CGY - 24;
-    rect(g, INK, x, top, 44, 5); rect(g, '#e8b77a', x + 1, top + 1, 42, 2); rect(g, '#c98a54', x + 1, top + 3, 42, 1);
-    rect(g, INK, x + 3, top + 5, 3, 19); rect(g, INK, x + 38, top + 5, 3, 19); rect(g, '#8a8aa0', x + 4, top + 5, 1, 19); rect(g, '#8a8aa0', x + 39, top + 5, 1, 19);
-    rect(g, INK, x + 5, top + 10, 34, 6); rect(g, '#c98a54', x + 6, top + 11, 32, 4);   // the book box
-    rect(g, INK, x + 10, top - 3, 10, 3); rect(g, '#3a86ff', x + 11, top - 3, 8, 2);      // a book on it
-    var cx = x + 30;                                                                         // the chair, pushed in
-    rect(g, INK, cx, CGY - 30, 16, 12); rect(g, chair, cx + 1, CGY - 29, 14, 10); rect(g, PX.mix(chair, '#ffffff', 0.35), cx + 1, CGY - 29, 14, 2);
-    rect(g, INK, cx - 2, CGY - 15, 20, 3); rect(g, chair, cx - 1, CGY - 14, 18, 1);
-    rect(g, INK, cx, CGY - 12, 2, 12); rect(g, INK, cx + 14, CGY - 12, 2, 12);
-  }
-  function cubbies(g, x) {
-    var y = CGY - 36, w = 100;
-    rect(g, INK, x, y, w, 36); rect(g, '#e8b77a', x + 1, y + 1, w - 2, 34); rect(g, '#f6cf96', x + 1, y + 1, w - 2, 1);
-    var bins = ['#e04848', '#ffc93c', '#3a86ff', '#57cc99', '#9b5de5', '#ff9d3a', '#ff8fab', '#3fa7ff'];
-    for (var r = 0; r < 2; r++) for (var c = 0; c < 4; c++) {
-      var bx = x + 4 + c * 24, by = y + 4 + r * 16;
-      rect(g, '#8a5a34', bx, by, 21, 13); rect(g, INK, bx + 1, by + 4, 19, 9); rect(g, bins[r * 4 + c], bx + 2, by + 5, 17, 7); rect(g, PX.mix(bins[r * 4 + c], '#ffffff', 0.4), bx + 2, by + 5, 17, 1);
+    // the class board: drawings the children made
+    var bx = 170, by = 62, bw = 140, bh = 66;
+    rect(g, INK, bx - 4, by - 4, bw + 8, bh + 8); rect(g, '#8a5a34', bx - 3, by - 3, bw + 6, bh + 6);
+    rect(g, '#d9a066', bx, by, bw, bh);
+    for (var d = 0; d < 40; d++) rect(g, '#c98a54', bx + hash(d * 3) * bw, by + hash(d * 7) * bh, 1, 1);
+    var papers = [[bx + 8, by + 8, '#fff6e0'], [bx + 50, by + 6, '#e3f4ff'], [bx + 94, by + 10, '#fff1f6'], [bx + 28, by + 36, '#f0ffe6'], [bx + 74, by + 38, '#fffbe0']];
+    papers.forEach(function (q, i) {
+      rect(g, INK, q[0] - 1, q[1] - 1, 36, 24); rect(g, q[2], q[0], q[1], 34, 22);
+      rect(g, '#e04848', q[0] + 15, q[1] - 2, 4, 3);
+      if (i === 0) { g.fillStyle = '#ffc93c'; g.beginPath(); g.arc(q[0] + 10, q[1] + 9, 5, 0, 7); g.fill(); rect(g, '#57cc99', q[0], q[1] + 17, 34, 5); }
+      if (i === 1) { rect(g, '#e04848', q[0] + 8, q[1] + 8, 16, 9); rect(g, '#3a86ff', q[0] + 6, q[1] + 4, 20, 4); rect(g, '#ffc93c', q[0] + 14, q[1] + 11, 4, 6); }
+      if (i === 2) { g.fillStyle = '#ff8fab'; g.beginPath(); g.arc(q[0] + 12, q[1] + 11, 5, 0, 7); g.arc(q[0] + 21, q[1] + 11, 5, 0, 7); g.fill(); }
+      if (i === 3) { rect(g, '#9b5de5', q[0] + 6, q[1] + 6, 6, 12); rect(g, '#3a86ff', q[0] + 14, q[1] + 4, 6, 14); rect(g, '#ff9d3a', q[0] + 22, q[1] + 8, 6, 10); }
+      if (i === 4) { F.draw(g, 'ABC', q[0] + 17, q[1] + 5, { color: '#3a86ff', align: 'center' }); }
+    });
+    // the clock
+    var ccx = 240, ccy = 40;
+    g.fillStyle = INK; g.beginPath(); g.arc(ccx, ccy, 13, 0, 7); g.fill();
+    g.fillStyle = '#e04848'; g.beginPath(); g.arc(ccx, ccy, 12, 0, 7); g.fill();
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(ccx, ccy, 10, 0, 7); g.fill();
+    rect(g, INK, ccx, ccy - 7, 1, 8); rect(g, INK, ccx, ccy, 5, 1); rect(g, INK, ccx - 1, ccy - 1, 2, 2);
+    // the chair rail and blue wainscot
+    rect(g, INK, 0, 149, W, 1); rect(g, '#c98a4b', 0, 150, W, 4); rect(g, '#f1c38e', 0, 150, W, 1); rect(g, '#8a5a34', 0, 154, W, 1);
+    rect(g, '#5b8bd9', 0, 155, W, H - 155);
+    for (var p = 0; p < W; p += 60) {
+      rect(g, '#3f6fc4', p + 6, 162, 48, 56); rect(g, '#6f9be3', p + 7, 163, 46, 54); rect(g, '#5b8bd9', p + 8, 164, 44, 52);
+      rect(g, '#86aef0', p + 8, 164, 44, 1);
     }
-    [[x + 8, '#3a86ff', 12], [x + 13, '#e04848', 10], [x + 18, '#ffc93c', 13]].forEach(function (b) { rect(g, INK, b[0], y - b[2], 5, b[2]); rect(g, b[1], b[0] + 1, y - b[2] + 1, 3, b[2] - 1); });
-    rect(g, INK, x + 74, y - 12, 14, 12); rect(g, '#d9643a', x + 75, y - 11, 12, 11);   // a plant on top
-    [[x + 78, y - 16, 5], [x + 85, y - 18, 6], [x + 81, y - 22, 4]].forEach(function (l) { cdisc(g, l[0], l[1], l[2] + 1, '#2c7a42'); cdisc(g, l[0], l[1], l[2], '#66cb5b'); });
-  }
-  function fishTank(g, x) {
-    var y = CGY - 28;
-    rect(g, INK, x, y, 56, 28); rect(g, '#a8693e', x + 1, y + 1, 54, 26); rect(g, '#c98a54', x + 1, y + 1, 54, 2);
-    rect(g, INK, x + 6, y + 8, 18, 14); rect(g, INK, x + 32, y + 8, 18, 14); rect(g, '#8a5a34', x + 7, y + 9, 16, 12); rect(g, '#8a5a34', x + 33, y + 9, 16, 12);
-    var ty = y - 30;
-    rect(g, INK, x + 3, ty, 50, 30); rect(g, '#6cc6e8', x + 4, ty + 3, 48, 26); rect(g, '#9ee0f6', x + 4, ty + 3, 48, 2);
-    rect(g, '#e8d29a', x + 4, ty + 25, 48, 4); for (var gx = x + 5; gx < x + 52; gx += 3) rect(g, '#c8a868', gx, ty + 26 + (gx % 2), 1, 1);
-    rect(g, '#2c7a42', x + 12, ty + 12, 2, 13); rect(g, '#57cc99', x + 13, ty + 9, 2, 12); rect(g, '#2c7a42', x + 44, ty + 15, 2, 10);
-    [[x + 24, ty + 12, '#ff9d3a'], [x + 36, ty + 19, '#ffd64a']].forEach(function (f) { rect(g, INK, f[0] - 1, f[1] - 1, 8, 5); rect(g, f[2], f[0], f[1], 6, 3); rect(g, f[2], f[0] + 6, f[1] - 1, 2, 5); rect(g, INK, f[0] + 1, f[1], 1, 1); });
-    [[x + 30, ty + 8], [x + 31, ty + 5], [x + 29, ty + 2]].forEach(function (b) { rect(g, '#e8f8ff', b[0], b[1], 1, 1); });
-    rect(g, '#3a3555', x + 2, ty - 2, 52, 3);
-  }
-  function bookshelf(g, x) {
-    var y = CGY - 70;
-    rect(g, INK, x, y, 40, 70); rect(g, '#8a5a34', x + 1, y + 1, 38, 68); rect(g, '#a8693e', x + 1, y + 1, 38, 2);
-    var cols = ['#e04848', '#3a86ff', '#57cc99', '#ffc93c', '#9b5de5', '#ff9d3a', '#ff8fab'];
-    for (var s = 0; s < 4; s++) {
-      var sy = y + 6 + s * 16, bx = x + 3, k = 0;
-      while (bx < x + 35) { var bw = 3 + Math.floor(hash(s * 31 + k) * 3), bh = 9 + Math.floor(hash(s * 7 + k * 3) * 4); bw = Math.min(bw, x + 37 - bx); rect(g, cols[(s * 3 + k) % 7], bx, sy + 13 - bh, bw, bh); bx += bw; k++; }
-      rect(g, '#5a3420', x + 1, sy + 13, 38, 3);
-    }
-  }
-  function globeTable(g, x) {
-    rect(g, INK, x, CGY - 26, 30, 4); rect(g, '#c98a54', x + 1, CGY - 25, 28, 2); rect(g, INK, x + 4, CGY - 22, 2, 22); rect(g, INK, x + 24, CGY - 22, 2, 22);
-    rect(g, INK, x + 13, CGY - 32, 4, 6); cdisc(g, x + 15, CGY - 42, 11, INK); cdisc(g, x + 15, CGY - 42, 10, '#5aa8f2');
-    g.fillStyle = '#7ed35c'; g.beginPath(); g.ellipse(x + 12, CGY - 45, 4, 5, 0.3, 0, 7); g.fill(); g.beginPath(); g.ellipse(x + 19, CGY - 39, 3, 4, 0, 0, 7); g.fill();
-    g.strokeStyle = '#ffd64a'; g.lineWidth = 1; g.beginPath(); g.arc(x + 15, CGY - 42, 12, -2.4, 0.7); g.stroke();
-  }
-  function backEasel(g, x) {
-    rect(g, INK, x + 4, CGY - 58, 3, 58); rect(g, INK, x + 33, CGY - 58, 3, 58); rect(g, INK, x + 18, CGY - 62, 3, 62);
-    rect(g, INK, x, CGY - 60, 40, 36); rect(g, '#ffffff', x + 1, CGY - 59, 38, 34);
-    ['#e04848', '#ff9d3a', '#ffd64a', '#57cc99', '#3a86ff'].forEach(function (c, i) { g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); g.arc(x + 20, CGY - 30, 14 - i * 2.5, Math.PI, 0); g.stroke(); });
-    rect(g, INK, x - 2, CGY - 24, 44, 3); rect(g, '#c98a54', x - 1, CGY - 23, 42, 1);
-  }
-  function coatRack(g, x) {
-    rect(g, INK, x + 8, CGY - 76, 3, 76); rect(g, '#8a5a34', x + 9, CGY - 76, 1, 76); rect(g, INK, x, CGY - 3, 19, 3);
-    rect(g, INK, x + 2, CGY - 76, 15, 2);
-    rect(g, INK, x - 4, CGY - 72, 12, 26); rect(g, '#ffc93c', x - 3, CGY - 71, 10, 24); rect(g, '#ffe48e', x - 3, CGY - 71, 10, 2);     // a raincoat
-    rect(g, INK, x + 12, CGY - 70, 11, 22); rect(g, '#9b5de5', x + 13, CGY - 69, 9, 20);                                               // a jacket
-  }
-  function bins(g, x) {
-    [[x, '#3a86ff', 'P'], [x + 22, '#57cc99', 'G']].forEach(function (b) { rect(g, INK, b[0], CGY - 26, 18, 26); rect(g, b[1], b[0] + 1, CGY - 25, 16, 25); rect(g, PX.mix(b[1], '#ffffff', 0.4), b[0] + 1, CGY - 25, 16, 2); rect(g, INK, b[0] - 1, CGY - 28, 20, 3); });
-  }
-  function buildClassMid() {
-    var c = canvas(CLW, H), g = c.getContext('2d');
-    cubbies(g, 30); backDesk(g, 170, '#e04848'); backDesk(g, 236, '#3a86ff'); fishTank(g, 330);
-    bookshelf(g, 446); globeTable(g, 500); backDesk(g, 600, '#57cc99'); backDesk(g, 666, '#ffc93c');
-    backEasel(g, 770); coatRack(g, 852); bins(g, 900);
-    g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(70,40,30,0.26)'; g.fillRect(0, 0, CLW, H); g.restore();
-    classMid = c;
+    // sunlight from the windows falls across the wall
+    g.save(); g.globalCompositeOperation = 'lighter';
+    [22, 352].forEach(function (wx) {
+      g.fillStyle = 'rgba(255,236,190,0.07)';
+      g.beginPath(); g.moveTo(wx, 44); g.lineTo(wx + 106, 44); g.lineTo(wx + 180, 224); g.lineTo(wx + 60, 224); g.closePath(); g.fill();
+    });
+    g.restore();
   }
   function classroomBackground(g, camX) {
-    if (!classBack) { buildClassBack(); buildClassMid(); }
-    ctiled(g, classBack, camX, 0.5);
-    ctiled(g, classMid, camX, 0.75);
-  }
-  /* drawn after the play layer: sunbeams, dust, patches of sun on the floor,
-   * and dark chair backs in front */
-  function classroomLight(g, camX, t) {
-    var off = -Math.round((camX * 0.5) % CLW); if (off > 0) off -= CLW;
-    g.save(); g.globalCompositeOperation = 'lighter';
-    for (var base = off; base < W; base += CLW) WINDOWS.forEach(function (wx) {
-      var x0 = base + wx, x1 = x0 + WW, gr = g.createLinearGradient(0, WY, 0, CGY + 8);
-      gr.addColorStop(0, 'rgba(255,236,190,0.10)'); gr.addColorStop(1, 'rgba(255,236,190,0.03)');
-      g.fillStyle = gr; g.beginPath(); g.moveTo(x0, WY + 20); g.lineTo(x1, WY + 20); g.lineTo(x1 + 90, CGY + 8); g.lineTo(x0 + 50, CGY + 8); g.closePath(); g.fill();
-      g.fillStyle = 'rgba(255,236,190,0.16)'; g.beginPath(); g.moveTo(x0 + 50, CGY); g.lineTo(x1 + 90, CGY); g.lineTo(x1 + 96, CGY + 8); g.lineTo(x0 + 56, CGY + 8); g.closePath(); g.fill();
-    });
-    for (var lx = 60; lx < CLW; lx += 160) for (var b2 = off; b2 < W; b2 += CLW) { g.fillStyle = 'rgba(255,250,230,0.06)'; g.beginPath(); g.ellipse(b2 + lx, 14, 40, 10, 0, 0, 7); g.fill(); }
-    g.restore();
-    for (var p = 0; p < 22; p++) {
-      var px = ((hash(p * 7) * W + t * (3 + p % 4) - camX * 0.3) % W + W) % W, py = 60 + hash(p * 13) * 150 + Math.sin(t * 0.8 + p) * 5;
-      rect(g, p % 3 ? 'rgba(255,240,200,0.75)' : 'rgba(255,255,255,0.9)', px, py, 1, 1);
-    }
-    // in front: chair backs and a plant, dark
-    var k = 1.3, span = 620;
-    for (var i = 0; i < 3; i++) {
-      var fx = ((i * 233 + 140 - camX * k) % span + span) % span - 70, kind = i % 3, col = '#2a1810';
-      if (kind === 0 || kind === 2) {                // a chair back, close: a curved top rail, two posts, slats
-        rect(g, col, fx + 2, H - 30, 30, 2); rect(g, col, fx, H - 28, 34, 8); rect(g, col, fx + 1, H - 20, 32, 1);
-        rect(g, col, fx + 1, H - 20, 5, 20); rect(g, col, fx + 28, H - 20, 5, 20);
-        rect(g, col, fx + 12, H - 20, 3, 14); rect(g, col, fx + 19, H - 20, 3, 14); rect(g, col, fx + 6, H - 8, 22, 3);
-        rect(g, 'rgba(255,220,180,0.12)', fx + 2, H - 29, 30, 1);
-      } else {                                        // a potted plant
-        rect(g, col, fx + 4, H - 12, 22, 12);
-        [[fx + 6, H - 18, 8], [fx + 18, H - 22, 9], [fx + 12, H - 28, 7], [fx + 26, H - 16, 6]].forEach(function (l) { cdisc(g, l[0], l[1], l[2], col); });
-      }
-    }
+    if (!wallCv) buildWall();
+    var off = -Math.round((camX * 0.6) % W); if (off > 0) off -= W;
+    for (var x = off; x < W; x += W) g.drawImage(wallCv, x, 0);
   }
 
   /* ------------------------------------------------------------ the library */
@@ -3237,108 +3035,6 @@ PQ.scenery = (function () {
     }
   }
 
-  /* ------------------------------------------------------------ the things that move */
-  function pdisc(g, x, y, r, c) { for (var yy = -r; yy <= r; yy++) { var w = Math.round(Math.sqrt(r * r - yy * yy + r * 0.5)); rect(g, c, x - w, y + yy, w * 2 + 1, 1); } }
-  /** the path a plank moves along: a dotted line with a round stop at each end */
-  function rail(g, x0, y0, x1, y1) {
-    var n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 6));
-    for (var i = 0; i <= n; i++) rect(g, 'rgba(43,35,80,0.4)', x0 + (x1 - x0) * i / n - 1, y0 + (y1 - y0) * i / n - 1, 2, 2);
-    [[x0, y0], [x1, y1]].forEach(function (p) { pdisc(g, Math.round(p[0]), Math.round(p[1]), 3, 'rgba(43,35,80,0.55)'); pdisc(g, Math.round(p[0]), Math.round(p[1]), 1, 'rgba(255,255,255,0.6)'); });
-  }
-  /** a plank that moves: wood, iron caps at its ends, little gold chevrons showing which way it goes (dir 0: none) */
-  function plankMover(g, x, y, w, dir, t) {
-    rect(g, 'rgba(10,6,20,0.25)', x + 2, y + 10, w, 3);
-    rect(g, INK, x - 1, y - 1, w + 2, 11);
-    rect(g, WOOD[1], x, y, w, 9); rect(g, WOOD[0], x, y, w, 1); rect(g, WOOD[2], x, y + 6, w, 2); rect(g, WOOD[3], x, y + 8, w, 1);
-    for (var s = x + 16; s < x + w - 4; s += 16) { rect(g, WOOD[3], s, y + 1, 1, 7); rect(g, WOOD[0], s + 1, y + 1, 1, 5); }
-    [x, x + w - 6].forEach(function (cx) { rect(g, '#5a5478', cx, y, 6, 9); rect(g, '#8a84a8', cx, y, 6, 1); rect(g, '#2b2648', cx + 2, y + 3, 2, 2); });
-    if (!dir) return;
-    var ax = Math.round(x + w / 2 + Math.sin((t || 0) * 6));
-    for (var i = 0; i < 3; i++) rect(g, '#fff1a6', ax + (dir > 0 ? i : -i) - (dir > 0 ? 1 : -1), y + 3 - i, 1, 1 + i * 2);
-  }
-  /** the gym's trampoline: a black mat on springs in a padded blue frame; squash pushes the mat down */
-  function trampoline(g, cx, base, squash) {
-    var w = 44, top = base - 14 + (squash || 0);
-    [cx - 18, cx + 16].forEach(function (l) { rect(g, INK, l, base - 8, 3, 8); rect(g, '#8a8aa0', l + 1, base - 8, 1, 8); });
-    rect(g, INK, cx - w / 2 - 1, base - 10, w + 2, 5); rect(g, '#3a6fd8', cx - w / 2, base - 9, w, 3); rect(g, '#7fb6ff', cx - w / 2, base - 9, w, 1);
-    for (var s = cx - 18; s <= cx + 16; s += 5) for (var k = 0; k < base - 10 - top - 2; k++) rect(g, k % 2 ? '#c8cce0' : '#8a8aa0', s + (k % 2), top + 2 + k, 1, 1);
-    rect(g, INK, cx - w / 2 + 2, top - 1, w - 4, 4); rect(g, '#2b2648', cx - w / 2 + 3, top, w - 6, 2); rect(g, '#5a5478', cx - w / 2 + 3, top, w - 6, 1);
-    rect(g, INK, cx - w / 2 - 2, top - 2, 6, 5); rect(g, '#e04848', cx - w / 2 - 1, top - 1, 4, 3);
-    rect(g, INK, cx + w / 2 - 4, top - 2, 6, 5); rect(g, '#e04848', cx + w / 2 - 3, top - 1, 4, 3);
-  }
-  /** a stack of books to stand on; shaking: it wobbles, cracks and drops dust */
-  function books(g, x, y, w, shaking, t) {
-    var dx = shaking ? Math.round(Math.sin((t || 0) * 40)) : 0;
-    [['#e04848', '#ff8a7a'], ['#3a86ff', '#7fb6ff'], ['#57cc99', '#9ef0c8']].forEach(function (b, i) {
-      var by = y + i * 5, inset = [0, 2, 1][i], bx = x + inset + dx;
-      rect(g, INK, bx - 1, by - 1, w - inset * 2 + 2, 7);
-      rect(g, b[0], bx, by, w - inset * 2, 5); rect(g, b[1], bx, by, w - inset * 2, 1);
-      rect(g, '#fff6e0', bx + w - inset * 2 - 5, by + 1, 4, 3);   // the pages
-      rect(g, '#ffd64a', bx + 4, by + 2, 6, 1);                   // a title
-    });
-    if (!shaking) return;
-    [[x - 4, y + 4], [x + w + 2, y + 2], [x + w / 2, y + 16]].forEach(function (p, i) { if (Math.floor((t || 0) * 12 + i) % 2) rect(g, '#d8d2ef', p[0], p[1], 2, 2); });
-    rect(g, INK, x + 10 + dx, y, 1, 3); rect(g, INK, x + 11 + dx, y + 2, 1, 3);   // a crack
-  }
-  /** the cafeteria's tray belt on its legs: the ribs move the way it runs, trays ride on it */
-  function belt(g, x, y, w, t, dir, floorY) {
-    for (var lx = x + 10; lx < x + w - 6; lx += 56) { rect(g, INK, lx, y + 11, 3, floorY - y - 11); rect(g, '#8a94b0', lx + 1, y + 11, 1, floorY - y - 11); }
-    rect(g, INK, x - 2, y - 1, w + 4, 13);
-    rect(g, '#8a94b0', x - 1, y + 5, w + 2, 6); rect(g, '#b8c0d8', x - 1, y + 5, w + 2, 1);
-    rect(g, '#3a3555', x, y, w, 5); rect(g, '#5a5478', x, y, w, 1);
-    var off = Math.floor((((t || 0) * BELT_SPEED * dir) % 8 + 8) % 8);
-    for (var s = x + off; s < x + w; s += 8) rect(g, '#7a74a0', s, y + 1, 2, 3);
-    [x + 3, x + w - 4].forEach(function (rx) { pdisc(g, rx, y + 8, 3, INK); pdisc(g, rx, y + 8, 2, '#d8dcef'); rect(g, INK, rx, y + 8, 1, 1); });
-    for (var a = x + 20; a < x + w - 20; a += 40) for (var i = 0; i < 3; i++) rect(g, '#ffd64a', a + (dir > 0 ? i : -i), y + 6 + i, 1, 5 - i * 2);
-    var span = w - 30, tray = (((t || 0) * BELT_SPEED * dir) % span + span) % span;   // a tray riding along
-    [[tray, '#ff9d3a'], [(tray + span / 2) % span, '#57cc99']].forEach(function (tr) {
-      var tx = Math.round(x + 3 + tr[0]);
-      rect(g, INK, tx, y - 4, 24, 4); rect(g, tr[1], tx + 1, y - 3, 22, 2);
-      rect(g, '#ffffff', tx + 3, y - 7, 7, 3); rect(g, '#e04848', tx + 13, y - 7, 6, 3);
-    });
-  }
-  var BELT_SPEED = 42;
-  /** Hush's ink on the floor: a dark wavy pool with bubbles, Hush's eyes peeking out */
-  function inkPuddle(g, x, w, base, t) {
-    for (var i = 0; i < w; i++) {
-      var hgt = 4 + Math.round(1.5 * Math.sin((t || 0) * 3 + i * 0.4) + Math.sin(i * 0.9));
-      if (i < 3 || i > w - 4) hgt = Math.max(1, hgt - (i < 3 ? 3 - i : i - (w - 4)) * 2);
-      rect(g, INK, x + i, base - hgt - 1, 1, hgt + 1);
-      rect(g, '#3a1f5c', x + i, base - hgt, 1, hgt); rect(g, '#5a3390', x + i, base - hgt, 1, 1);
-    }
-    for (var b = 0; b < Math.max(1, Math.floor(w / 24)); b++) {
-      var k = ((t || 0) * 0.8 + b * 0.33) % 1, bx = x + 6 + Math.round(hash(b * 7 + w) * (w - 12));
-      if (k < 0.7) rect(g, '#8a5ad8', bx, base - 5 - Math.round(k * 8), 2, 2);
-    }
-    var ex = x + Math.round(w / 2) - 5, blink = ((t || 0) % 3) < 0.15;
-    [ex, ex + 7].forEach(function (e) { rect(g, '#ffffff', e, base - 6, 3, blink ? 1 : 3); if (!blink) rect(g, INK, e + 1, base - 5, 1, 2); });
-  }
-  /** ink wings, like a bat's, for a blob that flies (x, y: its middle) */
-  function wings(g, x, y, t) {
-    var up = Math.floor((t || 0) * 8) % 2;
-    [-1, 1].forEach(function (side) {
-      for (var i = 0; i < 10; i++) {
-        var wx = x + side * (6 + i), lift = up ? Math.round(9 - i * 0.6 - (i > 6 ? (i - 6) * 1.5 : 0)) : Math.round(1 + i * 0.25);
-        var hh = up ? Math.max(2, 7 - Math.floor(i / 2)) : Math.max(2, 5 - Math.floor(i / 3));
-        rect(g, INK, wx, y + 2 - lift, 1, hh + 2); rect(g, i % 3 === 2 ? '#3a1f5c' : '#6a3fb8', wx, y + 3 - lift, 1, hh);
-      }
-    });
-  }
-  /** the bonus star: big, gold, breathing; before it comes out only its faint outline shows */
-  function bigStar(g, cx, cy, t, ghost, a) {
-    var r = 9 + (ghost ? 0 : Math.round(Math.sin((t || 0) * 4))), pts = [];
-    for (var i = 0; i < 10; i++) { var an = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; pts.push([cx + Math.cos(an) * rr, cy + Math.sin(an) * rr]); }
-    function shape(dy) { g.beginPath(); pts.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1] + dy); else g.moveTo(p[0], p[1] + dy); }); g.closePath(); }
-    g.save();
-    if (ghost) { g.globalAlpha = 0.35 + 0.15 * Math.sin((t || 0) * 2); g.strokeStyle = '#ffffff'; g.lineWidth = 1; shape(0); g.stroke(); g.restore(); return; }
-    g.globalAlpha = a === undefined ? 1 : a;
-    g.globalAlpha *= 0.35; pdisc(g, Math.round(cx), Math.round(cy), r + 5, '#fff1a6'); g.globalAlpha = a === undefined ? 1 : a;
-    g.fillStyle = INK; shape(1); g.fill();
-    g.fillStyle = '#ffd64a'; shape(0); g.fill();
-    rect(g, '#fff6c4', cx - 2, cy - 4, 2, 3);
-    g.restore();
-  }
-
   /* ------------------------------------------------------------ Hush's ink blobs */
   var INKBLOB = R('#a983ea', '#6a3fb8', '#4a2a86', '#2e1858', '#170b30');
   var blobs = {};
@@ -3368,11 +3064,10 @@ PQ.scenery = (function () {
     if (Math.floor(ph * 8) === 1) { rect(g, '#ffffff', x + 3, y - 6, 1, 1); rect(g, '#ffffff', x + 2, y - 5, 3, 1); }
   }
 
-  return { terrain: terrain, reset: reset, classroomBackground: classroomBackground, classroomLight: classroomLight, libraryBackground: libraryBackground,
+  return { terrain: terrain, reset: reset, classroomBackground: classroomBackground, libraryBackground: libraryBackground,
     libraryLight: libraryLight, lectern: lectern, prop: prop, door: door, backdrop: backdrop, musicNotes: musicNotes, roofLight: roofLight,
     piano: piano, poster: poster, archway: archway, themeAt: themeAt,
-    blob: blob, star: star, chalkboard: chalkboard,
-    rail: rail, plankMover: plankMover, trampoline: trampoline, books: books, belt: belt, inkPuddle: inkPuddle, wings: wings, bigStar: bigStar };
+    blob: blob, star: star, chalkboard: chalkboard };
 })();
 
 </script>
@@ -3753,11 +3448,7 @@ PQ.sound = (function () {
     hit: function (t) { tone(180, t, 0.12, 'square', 0.12, 60); tone(1200, t + 0.05, 0.1, 'triangle', 0.08, 1800); },
     growl: function (t) { tone(70, t, 0.35, 'sawtooth', 0.07, 50); tone(60, t + 0.38, 0.3, 'sawtooth', 0.06, 45); },
     note: function (t) { [784, 988, 1175].forEach(function (f, i) { tone(f, t + i * 0.09, 0.22, 'triangle', 0.09); }); },
-    whoosh: function (t) { tone(1200, t, 0.5, 'sawtooth', 0.05, 90); },
-    // the platforms: a trampoline, books giving way, the bonus star
-    boing: function (t) { tone(180, t, 0.28, 'triangle', 0.16, 720); tone(360, t + 0.04, 0.2, 'square', 0.04, 1100); },
-    crack: function (t) { tone(240, t, 0.05, 'square', 0.07, 120); tone(180, t + 0.06, 0.06, 'square', 0.06, 90); },
-    bonus: function (t) { [784, 988, 1175, 1568, 1976].forEach(function (f, i) { tone(f, t + i * 0.07, i === 4 ? 0.3 : 0.12, 'square', 0.07); }); }
+    whoosh: function (t) { tone(1200, t, 0.5, 'sawtooth', 0.05, 90); }
   };
   /* ---- mumbling: nobody speaks out loud; every character talks in short
    * blips as their words appear, each in a voice of their own (a waveform, a
@@ -4202,7 +3893,6 @@ PQ.levels = (function () {
     this.w = w; this.h = ROWS;
     this.tiles = new Uint8Array(w * ROWS);
     this.stars = []; this.goos = []; this.stations = []; this.decor = [];
-    this.movers = []; this.springs = []; this.crumbles = []; this.belts = []; this.puddles = []; this.bonuses = [];
     this.x = 0;
   }
   Builder.prototype.set = function (x, y, t) {
@@ -4226,25 +3916,7 @@ PQ.levels = (function () {
       this.stars.push({ x: (x + i) * 16 + 8, y: (y + SHIFT - Math.sin(t * Math.PI) * 2) * 16 + 8 });
     }
   };
-  /** one of Hush's ink blobs: kind 'walk' (to and fro), 'hop' (it jumps now and then)
-   *  or 'fly' (it flies to and fro on row y, in a wave) */
-  Builder.prototype.goo = function (x, range, kind, y) { this.goos.push({ x: x * 16, range: (range || 3) * 16, kind: kind || 'walk', y: y === undefined ? null : (y + SHIFT) * 16 }); };
-  /* ---- the things that move (game.js gives them their physics). You land
-   * on all of them from above and jump up through them from below. */
-  /** a plank w tiles wide, its top on row y, going to and fro by (dx, dy) tiles, once there and back every period seconds */
-  Builder.prototype.mover = function (x, y, w, dx, dy, period, phase) {
-    this.movers.push({ x: x * 16, y: (y + SHIFT) * 16, w: w * 16, dx: dx * 16, dy: dy * 16, period: period || 4, phase: phase || 0 });
-  };
-  /** a trampoline on the floor at column x: it throws you twice as high as a jump */
-  Builder.prototype.spring = function (x) { this.springs.push({ x: x * 16 + 8, y: (G + SHIFT) * 16 }); };
-  /** a stack of books w tiles wide, its top on row y: soon after you land it gives way, then comes back */
-  Builder.prototype.crumble = function (x, y, w) { this.crumbles.push({ x: x * 16, y: (y + SHIFT) * 16, w: (w || 2) * 16 }); };
-  /** a tray belt w tiles long, its top on row y, running dir (1 right, -1 left): it carries you */
-  Builder.prototype.belt = function (x, y, w, dir) { this.belts.push({ x: x * 16, y: (y + SHIFT) * 16, w: w * 16, dir: dir || 1 }); };
-  /** Hush's ink on the floor from column x, w tiles: touch it and you go back, as if you fell */
-  Builder.prototype.puddle = function (x, w) { this.puddles.push({ x: x * 16, w: w * 16 }); };
-  /** the big star of a run: it comes out when every star of the run is taken */
-  Builder.prototype.bonus = function (x, y) { this.bonuses.push({ x: x * 16 + 8, y: (y + SHIFT) * 16 + 8 }); };
+  Builder.prototype.goo = function (x, range) { this.goos.push({ x: x * 16, range: (range || 3) * 16 }); };
   Builder.prototype.deco = function (kind, x, y, extra) {
     var d = { kind: kind, x: x * 16, y: (y + SHIFT) * 16 };
     for (var k in extra) d[k] = extra[k];
@@ -4314,14 +3986,15 @@ PQ.levels = (function () {
 
     b.station('fetch', { form: 'deck' });
 
-    x = b.x;                                   // the first moving plank: a ferry over a wide pit
+    x = b.x;                                   // stairs, plank bridge
     b.ground(x, x + 5);
-    b.ground(x + 12, x + 18);
-    b.mover(x + 5, G, 3, 4, 0, 4.6);
-    b.starRow(x + 6, G - 3, 5);
-    b.goo(x + 15, 2);
-    b.deco('fence', x + 13, G);
-    b.x += 18;
+    b.ground(x + 3, x + 5, G - 1);
+    b.ground(x + 8, x + 16);
+    b.plank(x + 5, G - 2, 3);
+    b.starRow(x + 5, G - 3, 3);
+    b.goo(x + 11, 3);
+    b.deco('fence', x + 9, G);
+    b.x += 16;
 
     b.station('deliver', { owner: 'deck' });
 
@@ -4331,19 +4004,20 @@ PQ.levels = (function () {
     b.plank(x + 9, 6, 3);
     b.starRow(x + 9, 5, 3);
     b.starRow(x + 4, 7, 3);
-    b.goo(x + 6, 4); b.goo(x + 13, 3, 'hop');
+    b.goo(x + 6, 4); b.goo(x + 13, 3);
     b.deco('bush', x + 1, G); b.deco('tree', x + 15, G);
     b.x += 18;
 
     b.station('say', { form: 'deck' });
 
-    x = b.x;                                   // a plank that goes up and down in a wide pit
-    b.ground(x, x + 4); b.ground(x + 11, x + 18);
-    b.mover(x + 6, G - 4, 3, 0, 4, 4.4);
-    b.starArc(x + 5, 5, 5);
-    b.bricks(x + 12, G - 1, 1, 1); b.bricks(x + 13, G - 2, 1, 2);
-    b.goo(x + 16, 1, 'hop');
-    b.x += 18;
+    x = b.x;                                   // brick steps over a pit
+    b.ground(x, x + 4); b.ground(x + 7, x + 16);
+    b.bricks(x + 4, 8, 3, 1);
+    b.starRow(x + 4, 7, 3);
+    b.bricks(x + 10, G - 1, 1, 1); b.bricks(x + 11, G - 2, 1, 2);
+    b.star(x + 11, 7);
+    b.goo(x + 13, 2);
+    b.x += 16;
 
     b.station('own', { answer: 'deck' });
 
@@ -4357,16 +4031,12 @@ PQ.levels = (function () {
 
     b.station('fetch', { form: 'deck' });
 
-    x = b.x;                                   // two moving planks at two heights; the bonus star up high
-    b.ground(x, x + 4); b.ground(x + 17, x + 24);
-    b.mover(x + 4, G, 3, 4, 0, 4.0);
-    b.mover(x + 11, G - 1, 3, 3, 0, 4.0, 0.5);   // in step with the first: when that one is at its far end, this one waits at its near end
-    b.plank(x + 9, G - 5, 3);
-    b.starRow(x + 5, G - 3, 3); b.starRow(x + 12, G - 4, 3);
-    b.bonus(x + 10, G - 7);
-    b.goo(x + 20, 2);
+    x = b.x;
+    b.ground(x, x + 5); b.ground(x + 8, x + 16);
+    b.starArc(x + 4, 8, 5);
+    b.goo(x + 11, 3);
     b.deco('tree', x + 1, G);
-    b.x += 24;
+    b.x += 16;
 
     b.station('yesno', {});
 
@@ -4401,7 +4071,6 @@ PQ.levels = (function () {
     b.deco('desk', x + 2, G); b.deco('desk', x + 6, G); b.deco('desk', x + 10, G);
     b.starRow(x + 2, 8, 2); b.starRow(x + 6, 8, 2); b.starRow(x + 10, 8, 2);
     b.goo(x + 8, 1);
-    b.puddle(x + 4, 2); b.puddle(x + 12, 2);   // Hush's ink between the desks: jump it
     b.x += 16;
 
     b.station('own', { answer: 'my' });
@@ -4419,8 +4088,7 @@ PQ.levels = (function () {
     b.ground(x, x + 16);
     b.plank(x + 3, 8, 3); b.plank(x + 8, 6, 3);
     b.starRow(x + 8, 5, 3);
-    b.goo(x + 5, 3); b.goo(x + 11, 2, 'fly', G - 5);   // the first blob with wings, over the ink (high: a small hop goes under it)
-    b.puddle(x + 10, 3);
+    b.goo(x + 5, 3); b.goo(x + 12, 2);
     b.deco('desk', x + 13, G);
     b.x += 16;
 
@@ -4431,17 +4099,15 @@ PQ.levels = (function () {
     b.plank(x + 2, 9, 2); b.plank(x + 7, 9, 2);
     b.deco('desk', x + 2, G); b.deco('desk', x + 7, G);
     b.starRow(x + 4, 7, 3);
-    b.puddle(x + 4, 3);
     b.x += 12;
 
     b.station('fetch', { form: 'deck' });
 
-    x = b.x;                                   // high shelf run; the bonus star over the top shelf
+    x = b.x;                                   // high shelf run
     b.ground(x, x + 18);
     b.bricks(x + 3, G - 1, 1, 1);
     b.plank(x + 5, 8, 3); b.plank(x + 10, 6, 4);
     b.starRow(x + 10, 5, 4);
-    b.bonus(x + 12, 3);
     b.goo(x + 8, 3); b.goo(x + 15, 2);
     b.x += 18;
 
@@ -4462,7 +4128,6 @@ PQ.levels = (function () {
     b.plank(x + 4, 8, 3); b.plank(x + 9, 8, 3);
     b.starRow(x + 4, 7, 3); b.starRow(x + 9, 7, 3);
     b.goo(x + 7, 3);
-    b.puddle(x + 13, 2);
     b.x += 16;
 
     b.station('own', { answer: 'our' });
@@ -4472,7 +4137,6 @@ PQ.levels = (function () {
     b.bricks(x + 5, G - 2, 2, 2);
     b.starArc(x + 3, 7, 6);
     b.goo(x + 10, 2);
-    b.puddle(x + 2, 2);
     b.x += 14;
 
     b.station('say', { form: 'deck' });
@@ -4481,7 +4145,6 @@ PQ.levels = (function () {
     b.ground(x, x + 12);
     b.plank(x + 4, 9, 2); b.deco('desk', x + 4, G);
     b.starRow(x + 7, 8, 3);
-    b.puddle(x + 8, 2);
     b.x += 12;
 
     b.station('yesno', {});
@@ -4526,20 +4189,18 @@ PQ.levels = (function () {
     b.plank(x + 2, 9, 3); b.deco('table', x + 2, G);
     b.plank(x + 8, 9, 3); b.deco('table', x + 8, G);
     b.starRow(x + 2, 8, 3); b.starRow(x + 8, 8, 3);
-    b.goo(x + 6, 1, 'fly', G - 5);
-    b.puddle(x + 5, 3);
+    b.goo(x + 6, 1);
     b.x += 14;
 
     b.station('read', { text: 'max' });
 
-    x = b.x;                                   // books that give way, over Hush's ink
-    b.ground(x, x + 18);
-    b.puddle(x + 3, 8);
-    b.crumble(x + 4, G - 1, 2); b.crumble(x + 7, G - 2, 2);
-    b.starRow(x + 4, G - 3, 2); b.starRow(x + 7, G - 4, 2);
-    b.goo(x + 14, 2);
-    b.deco('beanbag', x + 15, G);
-    b.x += 18;
+    x = b.x;
+    b.ground(x, x + 16);
+    b.plank(x + 3, 8, 3); b.plank(x + 8, 6, 3);
+    b.starRow(x + 8, 5, 3);
+    b.goo(x + 5, 2); b.goo(x + 12, 2);
+    b.deco('beanbag', x + 13, G);
+    b.x += 16;
 
     b.station('own', { answer: 'her' });
 
@@ -4551,13 +4212,11 @@ PQ.levels = (function () {
 
     b.station('deliver', { owner: 'deck' });
 
-    x = b.x;                                   // a high shelf run: books that give way, the bonus star on top
+    x = b.x;                                   // a high shelf run
     b.ground(x, x + 18);
     b.bricks(x + 3, G - 1, 1, 1);
-    b.crumble(x + 5, 8, 3); b.plank(x + 10, 6, 4);
-    b.crumble(x + 15, 4, 2);
+    b.plank(x + 5, 8, 3); b.plank(x + 10, 6, 4);
     b.starRow(x + 10, 5, 4);
-    b.bonus(x + 15, 1);
     b.goo(x + 8, 3); b.goo(x + 15, 2);
     b.x += 18;
 
@@ -4578,7 +4237,6 @@ PQ.levels = (function () {
     b.bricks(x + 4, G - 2, 2, 2); b.bricks(x + 9, G - 3, 2, 3);
     b.starArc(x + 3, 7, 6);
     b.goo(x + 13, 2);
-    b.puddle(x + 6, 3);
     b.deco('globe', x + 1, G);
     b.x += 16;
 
@@ -4596,7 +4254,7 @@ PQ.levels = (function () {
     b.ground(x, x + 14);
     b.bricks(x + 5, G - 2, 2, 2);
     b.starArc(x + 3, 7, 6);
-    b.goo(x + 10, 2, 'fly', G - 4);
+    b.goo(x + 10, 2);
     b.x += 14;
 
     b.station('fetch', { form: 'deck', high: true });
@@ -4627,17 +4285,13 @@ PQ.levels = (function () {
 
     b.station('question', { kind: 'name' });
 
-    x = b.x;                                   // a trampoline up to the high bench, and the bonus star
-    b.ground(x, x + 18);
-    b.bricks(x + 2, G - 1, 2, 1);
-    b.spring(x + 6);
-    b.plank(x + 5, G - 8, 4);
-    b.starRow(x + 5, G - 9, 4);
-    b.bonus(x + 7, G - 11);
-    b.bricks(x + 10, G - 2, 2, 2);
-    b.plank(x + 13, G - 1, 3);
-    b.goo(x + 16, 1);
-    b.x += 18;
+    x = b.x;                                   // vaulting boxes and a bench
+    b.ground(x, x + 16);
+    b.bricks(x + 3, G - 1, 2, 1); b.bricks(x + 7, G - 2, 2, 2);
+    b.plank(x + 11, G - 1, 3);
+    b.starArc(x + 2, 8, 4); b.starRow(x + 7, 7, 2);
+    b.goo(x + 13, 1);
+    b.x += 16;
 
     b.station('fetch', { form: 'deck', noun: 'ball' });
 
@@ -4645,18 +4299,17 @@ PQ.levels = (function () {
     b.ground(x, x + 14);
     b.plank(x + 3, 8, 3); b.plank(x + 8, 6, 3);
     b.starRow(x + 8, 5, 3);
-    b.goo(x + 5, 2); b.goo(x + 11, 2, 'hop');
+    b.goo(x + 5, 2); b.goo(x + 11, 2);
     b.x += 14;
 
     b.station('sort', { cat: 'deck' });
 
-    x = b.x;                                   // a wall of vaulting boxes: only the trampoline gets you over
-    b.ground(x, x + 16);
-    b.spring(x + 4);
-    b.bricks(x + 7, G - 5, 2, 5);
-    b.starArc(x + 3, 4, 6);
-    b.goo(x + 13, 1, 'hop');
-    b.x += 16;
+    x = b.x;
+    b.ground(x, x + 14);
+    b.bricks(x + 4, G - 1, 2, 1); b.bricks(x + 6, G - 2, 2, 2); b.bricks(x + 8, G - 3, 2, 3);
+    b.starArc(x + 3, 6, 6);
+    b.goo(x + 12, 1);
+    b.x += 14;
 
     b.station('own', { answer: 'his' });
 
@@ -4693,9 +4346,7 @@ PQ.levels = (function () {
     b.ground(x, x + 14);
     b.plank(x + 3, 8, 3); b.plank(x + 8, 6, 3);
     b.starRow(x + 8, 5, 3);
-    b.goo(x + 5, 2); b.goo(x + 12, 1, 'hop');
-    b.mover(x + 11, G - 1, 2, 0, -4, 4.2);   // a stage lift
-    b.starRow(x + 11, 2, 2);
+    b.goo(x + 5, 2); b.goo(x + 12, 1);
     b.deco('drum', x + 1, G);
     b.x += 14;
 
@@ -4747,8 +4398,7 @@ PQ.levels = (function () {
     b.plank(x + 2, G - 2, 3); b.deco('lunchTable', x + 2, G);
     b.plank(x + 9, G - 2, 3); b.deco('lunchTable', x + 9, G);
     b.starRow(x + 2, 8, 3); b.starRow(x + 9, 8, 3);
-    b.goo(x + 7, 1, 'fly', G - 4);
-    b.puddle(x + 5, 4);
+    b.goo(x + 6, 1);
     b.x += 16;
 
     b.station('yesno', {});
@@ -4762,13 +4412,12 @@ PQ.levels = (function () {
 
     b.station('deliver', { owner: 'deck' });
 
-    x = b.x;                                   // a tray belt over a long puddle, running back the way you came
-    b.ground(x, x + 18);
-    b.puddle(x + 2, 11);
-    b.belt(x + 3, G - 2, 9, -1);
-    b.starRow(x + 4, G - 4, 6);
-    b.goo(x + 15, 1);
-    b.x += 18;
+    x = b.x;
+    b.ground(x, x + 16);
+    b.plank(x + 3, 8, 3); b.plank(x + 8, 6, 3);
+    b.starRow(x + 8, 5, 3);
+    b.goo(x + 5, 2); b.goo(x + 12, 2);
+    b.x += 16;
 
     b.station('own', { answer: 'their' });
 
@@ -4803,19 +4452,16 @@ PQ.levels = (function () {
     b.ground(x, x + 16);
     b.bricks(x + 4, G - 2, 2, 2); b.bricks(x + 9, G - 3, 2, 3);
     b.starArc(x + 3, 7, 6);
-    b.goo(x + 13, 2, 'hop');
-    b.puddle(x + 6, 3);
+    b.goo(x + 13, 2);
     b.x += 16;
 
     b.station('sort', { cat: 'deck' });
 
-    x = b.x;                                   // a belt up high carries you to the bonus star
-    b.ground(x, x + 14);
-    b.plank(x + 2, G - 2, 3); b.deco('lunchTable', x + 2, G);
-    b.belt(x + 5, G - 5, 5, 1);
-    b.starRow(x + 2, 8, 3); b.starRow(x + 6, G - 7, 3);
-    b.bonus(x + 11, G - 8);
-    b.x += 14;
+    x = b.x;
+    b.ground(x, x + 12);
+    b.plank(x + 4, G - 2, 3); b.deco('lunchTable', x + 4, G);
+    b.starRow(x + 4, 8, 3);
+    b.x += 12;
 
     b.station('own', { answer: 'your' });
 
@@ -4823,7 +4469,7 @@ PQ.levels = (function () {
     b.ground(x, x + 14);
     b.bricks(x + 5, G - 2, 2, 2);
     b.starArc(x + 3, 7, 6);
-    b.goo(x + 10, 2, 'fly', G - 4);
+    b.goo(x + 10, 2);
     b.x += 14;
 
     b.station('spell', { word: 'lunch', pic: 'lunchbox' });
@@ -5063,30 +4709,13 @@ PQ.levels = (function () {
     G.pip = { x: lvl.start.x - 18, y: GY - 40, frame: 0, perch: null };
     G.cam.x = 0;
     G.stars = lvl.stars.map(function (s) { return { x: s.x, y: s.y, got: false }; });
-    G.goos = lvl.goos.map(function (o, i) {
-      return { x0: o.x + 8, x: o.x + 8, range: o.range, dir: -1, alive: true, squash: 0, kind: o.kind || 'walk', fy: o.y, feet: o.y || GY, air: 0, vy: 0, hopT: 0.8 + (i % 3) * 0.45, i: i };
-    });
-    G.movers = lvl.movers.map(function (m) { return { x0: m.x, y0: m.y, x: m.x, y: m.y, w: m.w, dx: m.dx, dy: m.dy, period: m.period, phase: m.phase, mx: 0, my: 0 }; });
-    G.springs = lvl.springs.map(function (sp) { return { x: sp.x, y: sp.y, squash: 0 }; });
-    G.crumbles = lvl.crumbles.map(function (c) { return { x: c.x, y0: c.y, y: c.y, w: c.w, state: 'idle', t: 0 }; });
-    G.belts = lvl.belts.map(function (b) { return { x: b.x, y: b.y, w: b.w, dir: b.dir }; });
-    G.puddles = lvl.puddles.map(function (pd) { return { x: pd.x, w: pd.w }; });
-    G.pops = [];
-    moveThings(0);
+    G.goos = lvl.goos.map(function (o) { return { x0: o.x + 8, x: o.x + 8, range: o.range, dir: -1, alive: true, squash: 0 }; });
     G.npcs = []; G.parts = []; G.bubbles = []; G.emotes = []; G.flyers = []; G.active = null; G.grabbo = null; G.tip = null; G.outro = false;
     G.target = null; G.toldAct = false; G.toldRead = false; G.choice = null; G.cutin = null; G.bars = 0; G.reading = null; G.whisper = null; G.photo = null;
     G.picture = null; G.card = null; G.boss = null; G.hand = null; G.portal = null; G.loose = []; G.rain = []; G.notesFx = []; G.musicBack = false; G.toldBoss = false;
     snd.hush(false);
     G.score = { stars: 0, starsTotal: G.stars.length, right: 0, total: 0, log: [],
       zones: lvl.zones.map(function () { return { right: 0, total: 0 }; }) };
-    // a bonus star belongs to its run (from the station before it to the one after it): it comes out when every star of the run is taken
-    G.bonuses = lvl.bonuses.map(function (bn) {
-      var a = -Infinity, z = Infinity;
-      lvl.stations.forEach(function (st) { var s0 = st.s * TS, s1 = s0 + STW; if (s1 <= bn.x && s1 > a) a = s1; if (s0 >= bn.x && s0 < z) z = s0; });
-      var stars = G.stars.filter(function (s) { return s.x >= a && s.x < z; });
-      return { x: bn.x, y: bn.y, stars: stars, shown: !stars.length, got: false, t: 0 };
-    });
-    G.score.starsTotal += G.bonuses.length * BONUS;
 
     // decks: each zone deals its own, so every zone sees every form; refilled when they run dry
     var decks = {}, zoneNow = -1;
@@ -5348,16 +4977,6 @@ PQ.levels = (function () {
       var rowT = Math.floor(h.y / TS);
       for (cx = c0; cx <= c1; cx++) if (tileSolid(cx, rowT)) { h.y = (rowT + 1) * TS; h.vy = 20; snd.play('bonk'); break; }
     }
-    // the things that move: land on their tops from above (a plank that rose this frame is allowed for)
-    h.on = null;
-    if (h.vy >= 0 && !h.onGround) {
-      var plats = platforms();
-      for (i = 0; i < plats.length; i++) {
-        var pl = plats[i];
-        if (h.x + h.w - 2 <= pl.x || h.x + 2 >= pl.x + pl.w) continue;
-        if (prevBottom <= pl.top + 0.5 + pl.lift && h.y + h.h >= pl.top) { h.y = pl.top - h.h; h.vy = 0; h.onGround = true; h.on = pl.ref; break; }
-      }
-    }
     for (i = 0; i < solids.length; i++) {
       s = solids[i];
       if (!overlap(h, s)) continue;
@@ -5368,62 +4987,6 @@ PQ.levels = (function () {
       }
     }
   }
-
-  /* ================================================================ things that move
-   * Planks that go to and fro, trampolines, books that give way, tray belts,
-   * Hush's ink on the floor, the bonus stars. You land on the platforms from
-   * above and jump up through them from below; a plank or a belt carries
-   * whoever stands on it; a trampoline throws you high; a stack of books
-   * shakes, gives way and comes back. Touching the ink is like falling in a
-   * pit: back to the last safe place, nothing lost. */
-  var SPRING_V = -560, BELT_V = 42, SHAKE_T = 0.6, GONE_T = 2.6, BONUS = 5;
-  /** move the planks along their paths (eased at the ends, so they are easy to step on) */
-  function moveThings(dt) {
-    G.movers.forEach(function (m) {
-      var k = 0.5 - 0.5 * Math.cos((G.t / m.period + m.phase) * Math.PI * 2);
-      var nx = m.x0 + m.dx * k, ny = m.y0 + m.dy * k;
-      m.mx = nx - m.x; m.my = ny - m.y; m.x = nx; m.y = ny;
-    });
-    G.springs.forEach(function (sp) { if (sp.squash > 0) sp.squash = Math.max(0, sp.squash - dt * 3); });
-    G.crumbles.forEach(function (c) {
-      c.t += dt;
-      if (c.state === 'shake' && c.t >= SHAKE_T) { c.state = 'fall'; c.t = 0; snd.play('crack'); }
-      else if (c.state === 'fall') {
-        c.y = c.y0 + 300 * c.t * c.t;
-        if (c.t >= GONE_T) {   // it comes back where it was, unless someone stands in its place
-          var h = G.hero, spot = { x: c.x, y: c.y0, w: c.w, h: 16 };
-          c.y = c.y0;
-          if (!overlap(h, spot)) { c.state = 'back'; c.t = 0; }
-        }
-      } else if (c.state === 'back' && c.t >= 0.4) { c.state = 'idle'; c.t = 0; }
-    });
-  }
-  /** the tops you can stand on: { x, w, top, ref, lift } (lift: how far it rose this frame) */
-  function platforms() {
-    var out = [];
-    G.movers.forEach(function (m) { out.push({ x: m.x, w: m.w, top: m.y, ref: m, lift: Math.max(0, -m.my) }); });
-    G.crumbles.forEach(function (c) { if (c.state === 'idle' || c.state === 'shake') out.push({ x: c.x, w: c.w, top: c.y, ref: c, lift: 0 }); });
-    G.belts.forEach(function (b) { out.push({ x: b.x, w: b.w, top: b.y, ref: b, lift: 0 }); });
-    return out;
-  }
-  /** a trampoline throws you up whether you fall on it or walk onto it */
-  function springAt(h) {
-    if (h.vy < 0 || h.frozen) return null;
-    var feet = h.y + h.h;
-    for (var i = 0; i < G.springs.length; i++) {
-      var sp = G.springs[i];
-      if (feet < sp.y - 16 || feet > sp.y + 1) continue;
-      if (h.x + h.w - 3 <= sp.x - 18 || h.x + 3 >= sp.x + 18) continue;
-      return sp;
-    }
-    return null;
-  }
-  /** is the hero touching Hush's ink? (the feet on the floor, over a puddle) */
-  function inInk(h) {
-    if (h.y + h.h < GY - 1) return false;
-    return G.puddles.some(function (p) { return h.x + h.w - 3 > p.x + 2 && h.x + 3 < p.x + p.w - 2; });
-  }
-  function nearInk(x0, x1) { return G.puddles.some(function (p) { return x1 > p.x - 10 && x0 < p.x + p.w + 10; }); }
 
   /* ================================================================ stations */
   var PERCH = { dx: 32, y: GY - 42 };
@@ -6388,8 +5951,6 @@ PQ.levels = (function () {
     G.stations.forEach(function (st) { if (st.zone < k) { st.state = 'done'; st.gateOpen = 1; st.opening = false; } });
     G.stars.forEach(function (s) { if (s.x < z.x0) s.got = true; });
     G.goos.forEach(function (o) { if (o.x0 < z.x0) o.alive = false; });
-    G.bonuses.forEach(function (bn) { if (bn.x < z.x0) { bn.got = true; bn.shown = true; } });
-    G.hero.on = null; G.hero.boost = 0;
     G.active = null; G.pip.perch = null; G.bubbles = []; G.emotes = []; G.parts = []; G.flyers = []; G.tip = null;
     G.loose = []; G.rain = []; G.notesFx = []; G.portal = null; G.hand = null; G.boss = null; G.picture = null; G.card = null;
     h.hidden = false; h.frozen = false; G.pip.hidden = false; G.pip.pin = null; snd.hush(false);
@@ -6581,22 +6142,10 @@ PQ.levels = (function () {
     h.coyote = h.onGround ? 0.1 : h.coyote - dt;
     h.jumpBuf = (!inScript && pressed.jump) ? 0.13 : h.jumpBuf - dt;
     if (h.jumpBuf > 0 && h.coyote > 0) { h.vy = JUMP; h.coyote = 0; h.jumpBuf = 0; snd.play('jump'); }
-    if (h.boost > 0) h.boost -= dt;   // a trampoline's throw is not cut short when jump is let go
-    else if (!held('jump') && h.vy < -170) h.vy = -170;
+    if (!held('jump') && h.vy < -170) h.vy = -170;
     h.vy = Math.min(h.vy + GRAV * dt, 460);
-    // the things that move go along their paths; a plank or a belt carries whoever stands on it
-    moveThings(dt);
-    if (h.on && h.onGround && !h.frozen) {
-      if (h.on.mx !== undefined) { h.x += h.on.mx; if (h.vy >= 0) h.y += h.on.my; }
-      else if (h.on.dir) h.x += h.on.dir * BELT_V * dt;
-    }
     var wasGround = h.onGround, fallSpeed = h.vy;
-    if (h.frozen) { h.vx = h.vy = 0; } else moveHero(h, dt);
-    var spring = !inScript && springAt(h);
-    if (spring) {   // a trampoline: up you go
-      spring.squash = 1; h.y = Math.min(h.y, spring.y - 12 - h.h); h.vy = SPRING_V; h.onGround = false; h.on = null; h.boost = 0.7; h.coyote = 0;
-      snd.play('boing'); dust(spring.x, spring.y - 12, 6);
-    } else if (h.on && h.on.state === 'idle') { h.on.state = 'shake'; h.on.t = 0; snd.play('crack'); }   // books start to give way   // frozen: a scene moves the hero itself
+    if (h.frozen) { h.vx = h.vy = 0; } else moveHero(h, dt);   // frozen: a scene moves the hero itself
     if (!wasGround && h.onGround) { if (fallSpeed > 160) dust(h.x + h.w / 2, h.y + h.h, 6); h.land = 0.1; }
     if (h.land > 0) h.land -= dt;
     if (h.cheer > 0) h.cheer -= dt;
@@ -6607,15 +6156,11 @@ PQ.levels = (function () {
       h.step = stepNow;
     } else if (h.onGround) { h.dist = 0; h.step = -1; }
     if (h.hurt > 0) h.hurt -= dt;
-    if (h.onGround && !h.on && !nearInk(h.x, h.x + h.w)) {   // the last safe place: firm ground, not by the ink
+    if (h.onGround) {
       var under = function (px) { var t = tileAt(Math.floor(px / TS), Math.floor((h.y + h.h + 1) / TS)); return t === T.GROUND || t === T.BRICK; };
       if (under(h.x - 6) && under(h.x + h.w + 6)) h.safe = { x: h.x, y: h.y };
     }
-    var inked = !inScript && !h.frozen && inInk(h);   // Hush's ink is like a pit
-    if (h.y > VH + 40 || inked) {
-      snd.play('fall'); if (inked) burst(h.x + h.w / 2, GY - 4, '#8a5ad8', 12);
-      h.x = h.safe.x; h.y = h.safe.y - 2; h.vx = h.vy = 0; h.hurt = 1; h.on = null;
-    }
+    if (h.y > VH + 40) { snd.play('fall'); h.x = h.safe.x; h.y = h.safe.y - 2; h.vx = h.vy = 0; h.hurt = 1; }
     // ---- camera
     var zn = zoneOf(G.zone);
     var target = h.x + h.w / 2 - VW * 0.4;
@@ -6639,36 +6184,15 @@ PQ.levels = (function () {
         s.got = true; G.score.stars++; snd.play('star'); burst(s.x, s.y, '#ffd23f', 6);
       }
     });
-    // ---- the bonus stars: out when every star of the run is taken, worth five
-    G.bonuses.forEach(function (bn) {
-      if (bn.got) return;
-      if (!bn.shown) {
-        if (!bn.stars.every(function (s) { return s.got; })) return;
-        bn.shown = true; bn.t = 0; snd.play('bonus'); burst(bn.x, bn.y, '#fff1a6', 16);
-      }
-      bn.t += dt;
-      if (bn.t > 0.5 && Math.abs(bn.x - (h.x + h.w / 2)) < 14 && Math.abs(bn.y - (h.y + h.h / 2)) < h.h / 2 + 8) {
-        bn.got = true; G.score.stars += BONUS; snd.play('right'); burst(bn.x, bn.y, '#ffd23f', 24);
-        G.pops.push({ x: bn.x, y: bn.y - 8, t: 1.4, text: '+' + BONUS });
-      }
-    });
-    G.pops = G.pops.filter(function (q) { q.t -= dt; q.y -= 18 * dt; return q.t > 0; });
     // ---- Hush's ink blobs
     G.goos.forEach(function (o) {
       if (!o.alive) { o.squash -= dt; return; }
-      o.x += o.dir * (o.kind === 'fly' ? 30 : 22) * dt;
+      o.x += o.dir * 22 * dt;
       if (o.x < o.x0 - o.range) o.dir = 1; if (o.x > o.x0 + o.range) o.dir = -1;
-      if (o.kind === 'hop') {   // it jumps now and then
-        o.hopT -= dt;
-        if (o.air <= 0 && o.hopT <= 0) { o.vy = -250; o.hopT = 1.4 + (o.i % 3) * 0.35; }
-        if (o.vy || o.air > 0) { o.vy += 900 * dt; o.air = Math.max(0, o.air - o.vy * dt); if (o.air === 0 && o.vy > 0) o.vy = 0; }
-        o.feet = GY - o.air;
-      } else if (o.kind === 'fly') o.feet = o.fy + Math.sin(G.t * 2.4 + o.i) * 10;   // it flies in a wave
-      else o.feet = GY;
-      var ob = { x: o.x - 8, y: o.feet - 11, w: 16, h: 11 };
+      var ob = { x: o.x - 8, y: GY - 11, w: 16, h: 11 };
       if (!overlap(h, ob)) return;
       if (h.vy > 0 && h.y + h.h - h.vy * dt <= ob.y + 4) {
-        o.alive = false; o.squash = 0.45; h.vy = -280; snd.play('stomp'); burst(o.x, o.feet - 6, '#a983ea', 10);
+        o.alive = false; o.squash = 0.45; h.vy = -280; snd.play('stomp'); burst(o.x, GY - 6, '#a983ea', 10);
       } else if (h.hurt <= 0) {
         h.hurt = 1.2; h.vx = (h.x + h.w / 2 < o.x ? -1 : 1) * 160; h.vy = -200; snd.play('hurt');
       }
@@ -6829,7 +6353,6 @@ PQ.levels = (function () {
       if (st.poster) SC.poster(g, st.poster.x - cx, GY, st.poster.text);
     });
     SC.terrain(g, G.lvl, T, cx, zn);
-    drawThings(cx);
     // a clue nobody has looked at yet sparkles
     G.lvl.decor.forEach(function (d) {
       if (d.kind !== 'clue' || d.seen || Math.abs(d.x - cx - VW / 2) > VW) return;
@@ -6859,16 +6382,8 @@ PQ.levels = (function () {
     G.stars.forEach(function (s) { if (!s.got) SC.star(g, s.x - cx, s.y + Math.sin(G.t * 3 + s.x) * 1.5, G.t + s.x * 0.01); });
     G.goos.forEach(function (o) {
       if (!o.alive && o.squash <= 0) return;
-      var feet = o.feet || GY;
-      if (o.kind === 'hop' && o.air > 1) WD.shadow(g, o.x - cx, GY + 1, 12);
-      if (o.kind === 'fly' && o.alive) SC.wings(g, Math.round(o.x - cx), Math.round(feet - 10), G.t);
       var sp = SC.blob(Math.floor(G.t * 4) % 2, !o.alive);
-      drawSprite(sp, o.x - cx, Math.round(feet) + 1, o.dir > 0 ? 1 : -1);
-    });
-    G.bonuses.forEach(function (bn) {
-      if (bn.got || bn.x - cx < -30 || bn.x - cx > VW + 30) return;
-      if (bn.shown) SC.bigStar(g, bn.x - cx, bn.y + Math.sin(G.t * 3) * 2, G.t, false, Math.min(1, bn.t * 3));
-      else SC.bigStar(g, bn.x - cx, bn.y, G.t, true);
+      drawSprite(sp, o.x - cx, GY + 1, o.dir > 0 ? 1 : -1);
     });
     G.npcs.forEach(function (n) { if (n.x - cx > -40 && n.x - cx < VW + 40) drawNpc(n, cx); });
     // the hero (diving into the Pocket, the hero is drawn later, in front of Grabbo)
@@ -6920,29 +6435,9 @@ PQ.levels = (function () {
     if (G.boss) drawBoss(G.boss, cx);
     G.notesFx.forEach(function (q) { g.globalAlpha = Math.min(1, q.t); F.draw(g, '♪', Math.round(q.x - cx), Math.round(q.y), { color: q.c, outline: INK }); g.globalAlpha = 1; });
     G.parts.forEach(function (q) { g.fillStyle = q.c; g.fillRect(Math.round(q.x - cx), Math.round(q.y), 2, 2); });
-    G.pops.forEach(function (q) { g.globalAlpha = Math.min(1, q.t); F.draw(g, q.text, Math.round(q.x - cx), Math.round(q.y), { color: GOLD, outline: INK, align: 'center' }); g.globalAlpha = 1; });
-    if (th === 'yard') { WD.foreground(g, cx, G.t); WD.light(g, G.t, cx); }
-    else if (th === 'classroom') SC.classroomLight(g, cx, G.t);
+    if (th === 'yard') { WD.foreground(g, cx, G.t); WD.light(g, G.t); }
     else if (th === 'library') SC.libraryLight(g, cx, G.t);
     else if (th === 'roof') SC.roofLight(g, G.t);
-  }
-  /** the things that move: ink on the floor, belts, trampolines, planks on their paths, books */
-  function drawThings(cx) {
-    function seen(x, w) { return x + w - cx > -40 && x - cx < VW + 40; }
-    G.puddles.forEach(function (p) { if (seen(p.x, p.w)) SC.inkPuddle(g, Math.round(p.x - cx), p.w, GY, G.t); });
-    G.belts.forEach(function (b) { if (seen(b.x, b.w)) SC.belt(g, Math.round(b.x - cx), b.y, b.w, G.t, b.dir, GY); });
-    G.springs.forEach(function (sp) { if (seen(sp.x - 24, 48)) SC.trampoline(g, Math.round(sp.x - cx), sp.y, Math.round(sp.squash * 4)); });
-    G.movers.forEach(function (m) {
-      if (!seen(Math.min(m.x0, m.x0 + m.dx), m.w + Math.abs(m.dx))) return;
-      SC.rail(g, Math.round(m.x0 + m.w / 2 - cx), m.y0 + 4, Math.round(m.x0 + m.dx + m.w / 2 - cx), m.y0 + m.dy + 4);
-      SC.plankMover(g, Math.round(m.x - cx), Math.round(m.y), m.w, m.dx && Math.abs(m.mx) > 0.05 ? Math.sign(m.mx) : 0, G.t);
-    });
-    G.crumbles.forEach(function (c) {
-      if (!seen(c.x, c.w) || c.y > VH) return;
-      g.globalAlpha = c.state === 'back' ? Math.min(1, c.t / 0.4) : 1;
-      SC.books(g, Math.round(c.x - cx), Math.round(c.y), c.w, c.state === 'shake', G.t);
-      g.globalAlpha = 1;
-    });
   }
   /** the middle of Grabbo's pocket on screen (he faces right in his sprite; -1 flips him) */
   function pocketOf(gb) { return { x: gb.x + 3.5 * (gb.face || -1), y: gb.y + 10 - (gb.frame ? 1 : 0) }; }
