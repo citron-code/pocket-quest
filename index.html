@@ -4186,13 +4186,393 @@ PQ.rooms = (function () {
 })();
 
 </script>
+<script>/* js/music.js */
+/* Pocket Quest - the music: little songs for four chip voices, all made in
+ * code (nothing to download; it plays offline). The tunes are our own.
+ *
+ * A song is a few parts (an intro, A, B) played in an order, then looped
+ * from `loop`; `gain` makes a quiet room's song softer. Each part has its chords, one or two a bar ('F | Am | Bb C'),
+ * and four voices:
+ *   lead   the tune, a 25% pulse. Bars are split by '|' and each bar is split
+ *          evenly among its tokens: a note (C5, Bb4, F#5), '-' holds the note
+ *          before, '.' is a rest.
+ *   arp    a thin 12.5% pulse playing the chords as an arpeggio (a STYLE).
+ *   bass   a triangle playing the chords' roots (a STYLE).
+ *   drums  k kick, s snare, h hat, o open hat, '.' rest; two at once: ks.
+ * Every place has its own song (sound.js plays the one game.js asks for);
+ * mockups/music.html plays them all, the music recipe renders them to WAV.
+ */
+window.PQ = window.PQ || {};
+PQ.music = (function () {
+  'use strict';
+  var STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  function pc(letter, acc) { return STEP[letter] + (acc === '#' ? 1 : acc === 'b' ? -1 : 0); }
+  function midiOf(tok) { var m = /^([A-G])([#b]?)(\d)$/.exec(tok); return m ? 12 * (+m[3] + 1) + pc(m[1], m[2]) : null; }
+  function hz(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+  var QUAL = { '': [0, 4, 7], m: [0, 3, 7], '7': [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], sus4: [0, 5, 7], sus2: [0, 2, 7], dim: [0, 3, 6] };
+  function chordOf(sym) { var m = /^([A-G])([#b]?)(.*)$/.exec(sym); return { root: pc(m[1], m[2]), tones: QUAL[m[3]] || QUAL[''] }; }
+  function barsOf(str) { return String(str || '').split('|').map(function (s) { return s.trim(); }); }
+  /** a groove bar n times, the last bar a fill */
+  function rep(bar, n, fill) { var a = []; for (var i = 0; i < n; i++) a.push(fill && i === n - 1 ? fill : bar); return a.join(' | '); }
+
+  /* ---- arpeggio and bass styles: steps a bar, the chord tone each step plays (null: none), how many steps a note lasts */
+  var STYLES = {
+    up16:    { n: 16, hold: 1, f: function (c, i) { var t = c.tones.concat([12]); return t[i % t.length]; } },
+    updown8: { n: 8,  hold: 1, f: function (c, i) { return c.tones[[0, 1, 2, 1][i % 4]]; } },
+    octave8: { n: 8,  hold: 1, f: function (c, i) { return i % 2 ? 12 : 0; } },                 // root, octave, root, octave
+    bounce8: { n: 8,  hold: 2, f: function (c, i) { return [0, null, 7, null][i % 4]; } },      // root - fifth -
+    pump8:   { n: 8,  hold: 1, f: function (c, i) { return i % 4 === 2 ? 12 : 0; } },          // driving eighths
+    long2:   { n: 2,  hold: 1, f: function () { return 0; } }                                   // half notes, quiet rooms
+  };
+  // where each voice sits: the arpeggio around C4-C5, the bass around G2-G3 (low enough, still heard on a tablet)
+  function arpBase(root) { return 60 + root - (root > 7 ? 12 : 0); }
+  function bassBase(root) { return 48 + root - (root > 5 ? 12 : 0); }
+
+  /** a part, made ready: { bars, ev: [{ at (bars), len (bars), v: 'lead'|'arp'|'bass'|'drum', midi | hits }] } */
+  function compile(P, song) {
+    var ev = [], chords = [], nb = 0, up = song.arpOct || 0;
+    barsOf(P.chords).forEach(function (bar, bi) {
+      if (!bar) return;
+      nb = bi + 1;
+      var cs = bar.split(/\s+/);
+      cs.forEach(function (c, i) { chords.push({ at: bi + i / cs.length, len: 1 / cs.length, chord: chordOf(c) }); });
+    });
+    // the tune
+    var last = null;
+    barsOf(P.lead).forEach(function (bar, bi) {
+      if (!bar) return;
+      var toks = bar.split(/\s+/), n = toks.length;
+      toks.forEach(function (tk, i) {
+        if (tk === '-') { if (last) last.len += 1 / n; return; }
+        last = null;
+        var m = midiOf(tk); if (m === null) return;
+        last = { at: bi + i / n, len: 1 / n, v: 'lead', midi: m };
+        ev.push(last);
+      });
+    });
+    // the arpeggio and the bass, from the chords
+    [['arp', P.arp, function (r) { return arpBase(r) + up; }], ['bass', P.bass, bassBase]].forEach(function (x) {
+      var S = STYLES[x[1]]; if (!S) return;
+      chords.forEach(function (ch) {
+        var steps = Math.round(S.n * ch.len);
+        for (var i = 0; i < steps; i++) {
+          var off = S.f(ch.chord, i); if (off === null) continue;
+          ev.push({ at: ch.at + i / S.n, len: Math.min(S.hold, steps - i) / S.n, v: x[0], midi: x[2](ch.chord.root) + off });
+        }
+      });
+    });
+    // the drums
+    barsOf(P.drums).forEach(function (bar, bi) {
+      if (!bar) return;
+      var toks = bar.split(/\s+/), n = toks.length;
+      toks.forEach(function (tk, i) { if (tk !== '.') ev.push({ at: bi + i / n, len: 1 / n, v: 'drum', hits: tk.split('') }); });
+    });
+    return { bars: nb, ev: ev };
+  }
+  function ready(song) {
+    if (!song._parts) { song._parts = {}; for (var k in song.parts) song._parts[k] = compile(song.parts[k], song); }
+    return song._parts;
+  }
+  /** the song's three voices: the usual ones, with what the song changes (a softer lead, say) */
+  function voicesOf(song) {
+    if (!song._voices) {
+      song._voices = {};
+      ['lead', 'arp', 'bass'].forEach(function (k) {
+        var o = {}, a = VOICE[k], b = (song.voices || {})[k] || {}, x;
+        for (x in a) o[x] = a[x];
+        for (x in b) o[x] = b[x];
+        song._voices[k] = o;
+      });
+    }
+    return song._voices;
+  }
+  /** which part (and which of its bars) bar b of the song is: the order once, then round from `loop` */
+  function partAt(song, b) {
+    var parts = ready(song), first = 0, i;
+    for (i = 0; i < song.order.length; i++) first += parts[song.order[i]].bars;
+    var seq = song.order;
+    if (b >= first) {
+      seq = song.order.slice(song.loop || 0);
+      var len = 0; for (i = 0; i < seq.length; i++) len += parts[seq[i]].bars;
+      b = (b - first) % len;
+    }
+    for (i = 0; i < seq.length; i++) { var p = parts[seq[i]]; if (b < p.bars) return { part: p, bar: b }; b -= p.bars; }
+    return null;
+  }
+
+  /* ---- the four voices */
+  function pulse(ctx, duty) {
+    ctx._pqWaves = ctx._pqWaves || {};
+    if (!ctx._pqWaves[duty]) {
+      var N = 40, re = new Float32Array(N), im = new Float32Array(N);
+      for (var n = 1; n < N; n++) { re[n] = Math.sin(2 * Math.PI * n * duty) / (n * Math.PI); im[n] = (1 - Math.cos(2 * Math.PI * n * duty)) / (n * Math.PI); }
+      ctx._pqWaves[duty] = ctx.createPeriodicWave(re, im);
+    }
+    return ctx._pqWaves[duty];
+  }
+  var VOICE = {
+    lead: { duty: 0.25, vol: 0.13, gate: 0.92, dec: 0.12, sus: 0.65, vib: true },
+    arp:  { duty: 0.125, vol: 0.045, gate: 0.6, dec: 0.05, sus: 0.5 },
+    bass: { type: 'triangle', vol: 0.21, gate: 0.85, dec: 0.2, sus: 0.8 }
+  };
+  function tone(ctx, out, midi, t, dur, o) {
+    var f = hz(midi), osc = ctx.createOscillator(), g = ctx.createGain(), end = t + dur * o.gate;
+    if (o.duty) osc.setPeriodicWave(pulse(ctx, o.duty)); else osc.type = o.type;
+    osc.frequency.setValueAtTime(f, t);
+    if (o.vib && dur > 0.3) {   // a little vibrato on a long note
+      var l = ctx.createOscillator(), lg = ctx.createGain();
+      l.frequency.value = 5.5; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(f * 0.007, t + 0.3);
+      l.connect(lg); lg.connect(osc.frequency); l.start(t); l.stop(end + 0.1);
+    }
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(o.vol, t + 0.004);
+    g.gain.setTargetAtTime(o.vol * o.sus, t + 0.004, o.dec);
+    g.gain.setTargetAtTime(0.0001, end, 0.015);
+    osc.connect(g); g.connect(out);
+    osc.start(t); osc.stop(end + 0.12);
+  }
+  function noise(ctx) {
+    if (!ctx._pqNoise) {
+      var b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = b.getChannelData(0);
+      for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      ctx._pqNoise = b;
+    }
+    return ctx._pqNoise;
+  }
+  function sweep(ctx, out, type, f0, f1, t, dur, vol) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.7);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.02);
+  }
+  var DRUM = { s: ['bandpass', 1900, 0.24, 0.13], h: ['highpass', 7000, 0.07, 0.04], o: ['highpass', 6500, 0.06, 0.2] };
+  function hit(ctx, out, kind, t) {
+    if (kind === 'k') {   // a thump, and a click a small speaker can play
+      sweep(ctx, out, 'sine', 150, 45, t, 0.18, 0.55);
+      sweep(ctx, out, 'triangle', 420, 110, t, 0.03, 0.12);
+      return;
+    }
+    var D = DRUM[kind]; if (!D) return;
+    var n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    n.buffer = noise(ctx); f.type = D[0]; f.frequency.value = D[1]; if (kind === 's') f.Q.value = 0.7;
+    g.gain.setValueAtTime(D[2], t); g.gain.exponentialRampToValueAtTime(0.001, t + D[3]);
+    n.connect(f); f.connect(g); g.connect(out);
+    n.start(t, Math.random() * 0.5); n.stop(t + D[3] + 0.02);
+    if (kind === 's') sweep(ctx, out, 'triangle', 220, 140, t, 0.08, 0.14);   // the snare's body
+  }
+
+  /** put bar b of a song on the clock (the song began at `start`; tempo 1 = as written) */
+  function scheduleBar(ctx, out, song, b, start, tempo) {
+    var at = partAt(song, b); if (!at) return;
+    var barSec = 240 / (song.bpm * (tempo || 1)), beat = barSec / 4, t0 = start + b * barSec, VO = voicesOf(song);
+    at.part.ev.forEach(function (e) {
+      if (Math.floor(e.at + 1e-6) !== at.bar) return;
+      var pos = e.at - at.bar, t = t0 + pos * barSec, inBeat = (pos * 4) % 1;
+      if (song.swing && Math.abs(inBeat - 0.5) < 1e-3) t += song.swing * beat;   // a lilt on the off-beats
+      if (e.v === 'drum') e.hits.forEach(function (k) { hit(ctx, out, k, t); });
+      else tone(ctx, out, e.midi, t, e.len * barSec, VO[e.v]);
+    });
+  }
+
+  /* ---- the songs (all our own) */
+  var SONGS = {
+    /* the title: Pocket Quest's own tune, bright and a little heroic (F major) */
+    title: {
+      bpm: 128, loop: 1, order: ['intro', 'A', 'B'],
+      parts: {
+        intro: { chords: 'F | C', lead: '. | .', arp: 'up16', bass: 'octave8',
+          drums: 'k . . . k . . . k . . . k . . . | k . s . k . s . s s s s s s s s' },
+        A: { chords: 'F | Am | Bb | C | F | Am | Bb C | F',
+          lead: 'C5 - F5 - A5 - G5 F5 | E5 - - - . . C5 D5 | F5 - D5 - Bb4 - D5 F5 | E5 - - - - - . . | ' +
+                'C5 - F5 - A5 - C6 - | A5 - G5 - E5 - C5 - | D5 - F5 - E5 - G5 - | F5 - - - - - . .',
+          arp: 'up16', bass: 'octave8',
+          drums: rep('k . h . s . h . k . h k s . h .', 8, 'k . h . s . h . k . s . s s s s') },
+        B: { chords: 'Dm | Bb | F | C | Dm | Bb | Gm | C7',
+          lead: 'D5 - E5 - F5 - A5 - | F5 - - - D5 - Bb4 - | A4 - C5 - F5 - - - | E5 - - - G5 - - - | ' +
+                'D5 - E5 - F5 - A5 - | Bb5 - - - F5 - D5 - | G5 - F5 - D5 - Bb4 - | C6 Bb5 A5 G5 F5 - E5 -',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . . . s . . . k . k . s . . .', 8, 'k . s . k . s . s . s s s s s s') }
+      }
+    },
+    /* the school yard: skipping, sunny, a little swing (G major) */
+    yard: {
+      bpm: 116, swing: 0.1, loop: 0, order: ['A', 'B'],
+      parts: {
+        A: { chords: 'G | Em | C | D | G | Em | C D | G',
+          lead: 'G5 . B5 . A5 G5 . D5 | E5 - - . G5 . E5 . | C5 . E5 . G5 - E5 C5 | D5 - - - A5 - - . | ' +
+                'G5 . B5 . A5 G5 . D5 | E5 - G5 . B5 - A5 G5 | E5 - C5 . F#5 - A5 . | G5 - - - . . . .',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . h . s . h . k . h . s . h h', 8, 'k . h . s . h . k . s . s . s s') },
+        B: { chords: 'C | D | Bm | Em | Am | D | G | D7',
+          lead: 'E5 - - G5 - - E5 - | F#5 - - A5 - - F#5 - | D5 - - F#5 - - D5 - | E5 - - - B4 - - - | ' +
+                'C5 - E5 - A5 - G5 - | F#5 - - - D5 - - - | B4 - D5 - G5 - B5 - | A5 - F#5 - D5 - C6 -',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . h . s . h . k . h . s . h h', 8, 'k . h . s . h . s s s . s s s s') }
+      }
+    },
+    /* the classroom: calm and curious, under the reading (D major, a round square lead, no snare) */
+    classroom: {
+      bpm: 100, gain: 0.85, loop: 0, order: ['A', 'B'], voices: { lead: { duty: 0.5, vol: 0.1 } },
+      parts: {
+        A: { chords: 'D | Bm | G | A | D | Bm | Em A | D',
+          lead: 'A4 - D5 - F#5 - E5 D5 | B4 - - - F#5 - - - | G5 - F#5 - E5 - D5 - | E5 - - - - - . . | ' +
+                'A4 - D5 - F#5 - A5 - | B5 - A5 - F#5 - D5 - | G5 - E5 - C#5 - E5 - | D5 - - - - - . .',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . h . . . h . k . h . . . h .', 8, 'k . h . . . h . k . h . s . s .') },
+        B: { chords: 'G | A | F#m | Bm | G | A | Em | A7',
+          lead: 'B4 - D5 - G5 - - - | A4 - C#5 - E5 - - - | C#5 - - - A4 - - - | D5 - C#5 - B4 - - - | ' +
+                'D5 - G5 - B5 - A5 G5 | E5 - - - C#5 - E5 - | G5 - F#5 - E5 - B4 - | E5 - - - C#5 - - -',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . h . . . h . k . h . . . h .', 8, 'k . h . . . h . k . s . s . s .') }
+      }
+    },
+    /* the library: shh! a soft flute over a music box, no drums (C major) */
+    library: {
+      bpm: 88, gain: 0.7, loop: 0, order: ['A', 'B'],
+      voices: { lead: { duty: 0, type: 'triangle', vol: 0.17, gate: 0.95, sus: 0.75 }, arp: { vol: 0.03, gate: 0.4 } },
+      parts: {
+        A: { chords: 'C | Am | F | G | C | Am | Dm G | C',
+          lead: 'E5 G5 C6 G5 | A5 - E5 - | F5 A5 C6 A5 | G5 - - - | E5 G5 C6 E6 | D6 C6 A5 - | F5 A5 B5 D6 | C6 - - -',
+          arp: 'up16', bass: 'long2', drums: '' },
+        B: { chords: 'F | G | Em | Am | F | G | C | G7',
+          lead: 'A5 - C6 - | B5 - D6 - | G5 - B5 - | A5 - E5 - | F5 A5 C6 A5 | G5 B5 D6 B5 | E5 G5 C6 - | D6 - B5 G5',
+          arp: 'up16', bass: 'long2', drums: '' }
+      }
+    },
+    /* the gym: a cheer, go team! (E minor) */
+    gym: {
+      bpm: 140, loop: 0, order: ['A', 'B'],
+      parts: {
+        A: { chords: 'Em | C | G | D | Em | C | D | B7',
+          lead: 'E5 - E5 - G5 - E5 - | G5 - - - E5 - C5 - | D5 - G5 - B5 - G5 - | A5 - - - F#5 - - - | ' +
+                'E5 - G5 - B5 - E6 - | E6 - D6 - C6 - G5 - | F#5 - A5 - D6 - A5 - | B5 - - - D#5 - F#5 -',
+          arp: 'up16', bass: 'octave8',
+          drums: rep('k . h . s . h . k . h k s . h .', 8, 'k . h . s . h . k . s . s s s s') },
+        B: { chords: 'Am | Em | C | D | Am | Em | B7 | B7',
+          lead: 'A5 - . A5 - . C6 - | B5 - . G5 - . E5 - | E5 - G5 - C6 - E6 - | D6 - - - A5 - - - | ' +
+                'C6 - . A5 - . E5 - | G5 - . E5 - . B4 - | D#5 - F#5 - A5 - B5 - | B5 - - - - - . .',
+          arp: 'up16', bass: 'octave8',
+          drums: rep('k . h . s . h . k . h . s . h o', 8, 'k . s . k . s . s s s s s s s s') }
+      }
+    },
+    /* the music room, once the music is back: la la la (A major, a little swing) */
+    music: {
+      bpm: 124, swing: 0.08, loop: 0, order: ['A', 'B'],
+      parts: {
+        A: { chords: 'A | F#m | D | E | A | F#m | D E | A',
+          lead: 'C#5 - E5 - A5 - - - | F#5 - E5 - C#5 - A4 - | D5 - F#5 - A5 - F#5 - | G#5 - - - E5 - - - | ' +
+                'C#5 - E5 - A5 - C#6 - | B5 - A5 - F#5 - C#5 - | F#5 - A5 - G#5 - B5 - | A5 - - - - - . .',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . h . s . h . k . h . s . h h', 8, 'k . h . s . h . k . s . s s s s') },
+        B: { chords: 'D | E | C#m | F#m | Bm | E | A | E7',
+          lead: 'F#5 - - A5 - - F#5 - | G#5 - - B5 - - G#5 - | E5 - - G#5 - - E5 - | F#5 - - - C#5 - - - | ' +
+                'D5 - F#5 - B5 - A5 - | G#5 - - - E5 - - - | C#5 - E5 - A5 - C#6 - | B5 - G#5 - E5 - D5 -',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . h . s . h . k . h . s . h h', 8, 'k . h . s . h . s s s . s s s s') }
+      }
+    },
+    /* the cafeteria: lunch! bouncy and a bit silly, a thin nasal lead (C major, swing) */
+    cafeteria: {
+      bpm: 132, swing: 0.14, loop: 0, order: ['A', 'B'], voices: { lead: { duty: 0.125, vol: 0.12 }, arp: { duty: 0.25, vol: 0.04 } },
+      parts: {
+        A: { chords: 'C | C | F | C | G | F | C G | C',
+          lead: 'C5 . E5 . G5 . E5 . | A5 - G5 . E5 . C5 . | F5 . A5 . C6 . A5 . | G5 - - - E5 - - . | ' +
+                'D5 . G5 . B5 . G5 . | A5 - F5 . C5 . A4 . | E5 . C5 . D5 . B4 . | C5 - - - . . . .',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . h . s . h . k . h . s . h h', 8, 'k . h . s . h . s s s . s s s s') },
+        B: { chords: 'Am | Em | F | C | Dm | G | C | G7',
+          lead: 'A4 - C5 - E5 - A5 - | G5 - E5 - B4 - E5 - | F5 - A5 - C6 - A5 - | G5 - - - E5 - - - | ' +
+                'F5 - A5 - D6 - A5 - | B5 - - - G5 - D5 - | E5 - G5 - C6 - - - | B5 - A5 - G5 - F5 -',
+          arp: 'updown8', bass: 'bounce8',
+          drums: rep('k . h . s . h . k . h . s . h h', 8, 'k . h . s . h . k . s . s s s s') }
+      }
+    },
+    /* the rooftop: Grabbo, full of Hush's dark (D minor, fast) */
+    boss: {
+      bpm: 156, loop: 1, order: ['intro', 'A', 'B'],
+      parts: {
+        intro: { chords: 'Dm | A7', lead: '. | .', arp: 'up16', bass: 'pump8',
+          drums: 'k . . . k . . . k . . . k . . . | k . k . k . k . s s s s s s s s' },
+        A: { chords: 'Dm | Dm | Bb | A | Dm | Dm | Bb | A7',
+          lead: 'D5 - - D5 - - F5 - | E5 - - D5 - - A4 - | Bb4 - - D5 - - F5 - | E5 - - - C#5 - - - | ' +
+                'D5 - - F5 - - A5 - | G5 - - F5 - - D5 - | F5 - - D5 - - Bb4 - | A4 - C#5 - E5 - G5 -',
+          arp: 'up16', bass: 'pump8',
+          drums: rep('k . h . ks . h . k k h . ks . h .', 8, 'k . h . ks . h . ks . s . s s s s') },
+        B: { chords: 'Gm | Dm | Bb | A | Gm | Dm | E7 | A7',
+          lead: 'G5 - Bb5 - D6 - - - | F5 - A5 - D6 - - - | D6 - C6 - Bb5 - F5 - | E5 - - - A5 - - - | ' +
+                'Bb5 - A5 - G5 - D5 - | F5 - E5 - D5 - A4 - | G#4 - B4 - D5 - E5 - | C#5 - E5 - G5 - A5 -',
+          arp: 'up16', bass: 'pump8',
+          drums: rep('k . h . ks . h . k . h . ks . h o', 8, 'ks . s . ks . s . s s s s s s s s') }
+      }
+    },
+    /* the endless run: driving, keep going! (A minor) */
+    endless: {
+      bpm: 148, loop: 1, order: ['intro', 'A', 'B'],
+      parts: {
+        intro: { chords: 'Am | E7', lead: '. | .', arp: 'up16', bass: 'pump8',
+          drums: 'k . h . k . h . k . h . k . h . | k . h . k . h . s s s s s s s s' },
+        A: { chords: 'Am | F | C | G | Am | F | G | E7',
+          lead: 'A4 - C5 - E5 - A5 - | G5 - F5 - E5 - C5 - | E5 - - - G5 - C6 - | B5 - - - G5 - D5 - | ' +
+                'A5 - E5 - A5 - B5 - | C6 - B5 - A5 - F5 - | G5 - A5 - B5 - D6 - | E6 - - - B5 - G#5 -',
+          arp: 'up16', bass: 'pump8',
+          drums: rep('k . h . ks . h . k . h . ks . h o', 8, 'k . h . ks . h . ks . s . s s s s') },
+        B: { chords: 'F | G | Em | Am | F | G | E7 | E7',
+          lead: 'A5 - . A5 - . C6 - | B5 - . B5 - . D6 - | G5 - . G5 - . B5 - | A5 - - - E5 - A5 - | ' +
+                'C6 - . A5 - . F5 - | D6 - . B5 - . G5 - | G#5 - B5 - D6 - E6 - | E6 - - - - - . .',
+          arp: 'up16', bass: 'pump8',
+          drums: rep('k . h . ks . h . k . h . ks . h o', 8, 'k . s . ks . s . s s s s s s s s') }
+      }
+    }
+  };
+
+  /** the first `seconds` of a song, drawn offline: a Promise of the samples (mono) */
+  function render(name, seconds, rate) {
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, song = SONGS[name];
+    if (!OAC || !song) return Promise.resolve(null);
+    rate = rate || 32000;
+    var ctx = new OAC(1, Math.ceil(seconds * rate), rate), out = ctx.createGain();
+    out.gain.value = song.gain || 1; out.connect(ctx.destination);
+    var barSec = 240 / song.bpm;
+    for (var b = 0; b * barSec < seconds; b++) scheduleBar(ctx, out, song, b, 0.05, 1);
+    return ctx.startRendering().then(function (buf) { return buf.getChannelData(0); });
+  }
+  /** how long one pass is (the order once) and one loop (from `loop`), in seconds */
+  function lengths(name) {
+    var song = SONGS[name], parts = ready(song), barSec = 240 / song.bpm, first = 0, loop = 0;
+    song.order.forEach(function (k, i) { first += parts[k].bars; if (i >= (song.loop || 0)) loop += parts[k].bars; });
+    return { bar: barSec, first: first * barSec, loop: loop * barSec };
+  }
+
+  /* ---- playing live (the listening page; later the game) */
+  var playing = null;
+  function play(ctx, out, name, tempo) {
+    stop();
+    var song = SONGS[name]; if (!song) return;
+    var bus = ctx.createGain(); bus.gain.value = song.gain || 1; bus.connect(out);
+    var start = ctx.currentTime + 0.08, b = 0, barSec = 240 / (song.bpm * (tempo || 1));
+    function tick() { while (start + b * barSec < ctx.currentTime + 0.6) { scheduleBar(ctx, bus, song, b, start, tempo); b++; } }
+    tick();
+    playing = { name: name, bus: bus, timer: setInterval(tick, 100) };
+  }
+  function stop() {
+    if (!playing) return;
+    var p = playing; playing = null;
+    clearInterval(p.timer);
+    p.bus.gain.setTargetAtTime(0, p.bus.context.currentTime, 0.03);
+    setTimeout(function () { try { p.bus.disconnect(); } catch (e) {} }, 400);
+  }
+
+  return { SONGS: SONGS, render: render, lengths: lengths, play: play, stop: stop, now: function () { return playing && playing.name; } };
+})();
+
+</script>
 <script>/* js/sound.js */
-/* Pocket Quest - chiptune sound effects and a tiny music loop, all synthesised. */
+/* Pocket Quest - chiptune sound effects, the characters' mumbling, and the
+ * music (its songs are in js/music.js), all synthesised. */
 window.PQ = window.PQ || {};
 PQ.sound = (function () {
   'use strict';
   var ac = null, master = null, musicGain = null, musicOn = true, ducked = false, hushed = false;
-  var musicTimer = null, step = 0, nextTime = 0;
 
   function ensure() {
     if (ac) {   // a phone can leave it 'suspended' or 'interrupted' (a call, another app): wake it on the next touch
@@ -4308,26 +4688,30 @@ PQ.sound = (function () {
     try { FX[name] && FX[name](ac.currentTime + 0.01); } catch (e) {}
   }
 
-  /* ---- music: 16-step loop, bass + lead, C major, bouncy */
-  var LEAD = [72, 0, 76, 0, 79, 0, 76, 0, 77, 0, 74, 0, 72, 74, 76, 0,
-              72, 0, 76, 0, 79, 0, 81, 0, 79, 0, 77, 76, 74, 0, 72, 0];
-  var BASS = [48, 0, 55, 0, 48, 0, 55, 0, 53, 0, 50, 0, 55, 0, 43, 0,
-              48, 0, 55, 0, 48, 0, 57, 0, 53, 0, 55, 0, 43, 0, 48, 0];
-  function midi(n) { return 440 * Math.pow(2, (n - 69) / 12); }
-  function schedule() {
-    var spb = 0.15;
-    while (nextTime < ac.currentTime + 0.3) {
-      var i = step % LEAD.length;
-      if (LEAD[i]) tone(midi(LEAD[i]), nextTime, spb * 0.9, 'square', 0.05, null, musicGain);
-      if (BASS[i]) tone(midi(BASS[i]), nextTime, spb * 1.6, 'triangle', 0.12, null, musicGain);
-      nextTime += spb; step++;
-    }
+  /* ---- music: every place has its own song (js/music.js). game.js says
+   * which one (song, every frame; nothing happens while it stays the same),
+   * and it plays through musicGain: the music button, quieter under a dialog,
+   * silent while Hush has the music. It starts with the first touch or key. */
+  var MUSIC_LEVEL = 0.15;   // the songs are fuller than the old loop: this keeps them as loud as it was (the music recipe measures it)
+  var musicBus = null, wantSong = null, nowSong = null, started = false;
+  function song(name, tempo) {
+    tempo = tempo || 1;
+    if (wantSong && wantSong.name === name && wantSong.tempo === tempo) return;
+    wantSong = { name: name, tempo: tempo };
+    if (started) playWanted();
+  }
+  function playWanted() {
+    if (!ac || !PQ.music || !wantSong) return;
+    if (nowSong && nowSong.name === wantSong.name && nowSong.tempo === wantSong.tempo) return;
+    nowSong = { name: wantSong.name, tempo: wantSong.tempo };
+    if (!musicBus) { musicBus = ac.createGain(); musicBus.gain.value = MUSIC_LEVEL; musicBus.connect(musicGain); }
+    try { if (PQ.music.SONGS[nowSong.name]) PQ.music.play(ac, musicBus, nowSong.name, nowSong.tempo); else PQ.music.stop(); } catch (e) {}
   }
   function startMusic() {
-    if (!ensure() || musicTimer) return;
-    nextTime = ac.currentTime + 0.05;
-    musicTimer = setInterval(schedule, 80);
+    if (!ensure() || started) return;
+    started = true;
     applyMusicLevel();
+    playWanted();
   }
   function applyMusicLevel() {
     if (!ac) return;
@@ -4335,7 +4719,8 @@ PQ.sound = (function () {
     musicGain.gain.setTargetAtTime(v, ac.currentTime, 0.08);
   }
   return {
-    unlock: ensure, play: play, startMusic: startMusic, mumble: mumble, babble: babble,
+    unlock: ensure, play: play, startMusic: startMusic, song: song, mumble: mumble, babble: babble,
+    songNow: function () { return nowSong && nowSong.name; },
     /* a sample to listen to: lines = [[voice, text, letters per second]], drawn
      * into an offline context (the same syllables the game makes) */
     renderSample: function (lines, rate) {
@@ -7335,7 +7720,19 @@ PQ.CONFIG = {
     if (G.zoneTitle) { G.zoneTitle.t -= dt; if (G.zoneTitle.t <= 0) G.zoneTitle = null; }
   }
 
+  /** the song for where we are (js/music.js): the title's on the title, the student card, the class
+   * table and the results; each place its own (the music room's once the music is back: sound.js
+   * keeps it silent till then); Grabbo's on the rooftop; the run's own, a little faster every room */
+  function songNow() {
+    if (G.mode === 'title' || G.mode === 'create' || G.mode === 'board' || G.mode === 'results') return 'title';
+    if (G.endless) return 'endless';
+    var z = G.lvl && zoneOf(G.zone), h = G.hero;
+    if (!z) return 'title';
+    if (z.boss) return 'boss';
+    return z.split && h && h.x + h.w / 2 >= z.split ? z.theme2 : z.theme;
+  }
   function update(dt) {
+    snd.song(songNow(), G.endless && G.mode !== 'board' ? 1 + Math.min(0.2, G.endless.room * 0.025) : 1);
     if (G.mode === 'title') {
       var sv = loadSave(), items = titleItems(sv), n = items.length;
       if (G.titleSel >= n) G.titleSel = 0;
