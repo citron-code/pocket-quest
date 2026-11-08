@@ -1563,8 +1563,10 @@ PQ.ui = (function () {
   /* ---- HUD: stars, music */
   function hud(g, stars, o) {
     o = o || {};
-    star(g, 8, 7);
-    F.draw(g, '× ' + stars, 21, 7, { color: '#ffffff', outline: INK });
+    if (!o.noStars) {   // the endless run shows its points on a slate instead
+      star(g, 8, 7);
+      F.draw(g, '× ' + stars, 21, 7, { color: '#ffffff', outline: INK });
+    }
     var bx = 456, by = 6;
     rect(g, INK, bx + 1, by, 15, 17); rect(g, INK, bx, by + 1, 17, 15); rect(g, COL.gold, bx + 1, by + 1, 15, 15); rect(g, COL.goldHi, bx + 2, by + 1, 13, 1);
     icon(g, NOTE, bx + 5, by + 4, { k: INK, w: '#ffffff' });
@@ -1621,7 +1623,8 @@ PQ.ui = (function () {
   }
 
   return { COL: COL, panel: panel, card: card, tail: tail, icon: icon, star: star, hand: hand, keycap: keycap, prompt: prompt,
-    bubble: bubble, emote: emote, banner: banner, dialog: dialog, choices: choices, block: block, hud: hud, touchButton: touchButton, rect: rect };
+    bubble: bubble, emote: emote, banner: banner, dialog: dialog, choices: choices, block: block, hud: hud, touchButton: touchButton, rect: rect,
+    WOOD: WOOD_FRAME, SLATE: SLATE };
 })();
 
 </script>
@@ -5352,8 +5355,126 @@ PQ.levels = (function () {
     return b;
   }
 
-  return { ROWS: ROWS, G: GROUND_ROW, STATION_W: STATION_W, T: T, unit2: unit2 };
+  /* ------------------------------------------------------------ the endless run
+   * A chain of rooms, built one at a time. Each room is a zone of its own: a
+   * start, four stations with short, easy hops between them (the run is for
+   * the English, not the jumping), and a door to the next room. The rooms go
+   * round the school, and the questions get harder as the run goes on:
+   * this / that first, then whose, then questions, spelling and reading. */
+  var ROOMS = [
+    { id: 'yard', name: 'The School Yard', theme: 'yard' },
+    { id: 'classroom', name: 'The Classroom', theme: 'classroom' },
+    { id: 'library', name: 'The Library', theme: 'library' },
+    { id: 'gym', name: 'The Gym', theme: 'gym', nouns: ['ball', 'pencil', 'eraser', 'book'] },
+    { id: 'music', name: 'The Music Room', theme: 'music', nouns: ['book', 'pencil', 'bag', 'cap'] },
+    { id: 'cafeteria', name: 'The Cafeteria', theme: 'cafeteria', nouns: ['apple', 'sandwich', 'banana', 'lunchbox'] },
+    { id: 'roof', name: 'The Rooftop', theme: 'roof' }
+  ];
+  var RUN_PLAN = [
+    ['say', 'fetch', 'own', 'deliver'],       // room 1: this / that, my / his / her
+    ['say', 'own', 'fetch', 'yesno'],          // room 2: + Is this his ...? Yes, it is.
+    ['fetch', 'question', 'say', 'deliver'],   // room 3: + What / Where / How old / Who
+    ['own', 'sort', 'say', 'spell']            // room 4: + subject / place / person, spelling
+  ];
+  var RUN_WORDS = ['desk', 'ruler', 'pencil', 'book', 'bag', 'crayon', 'eraser', 'music', 'library'];
+  var RUN_TEXTS = ['max', 'mia', 'pip', 'twins'];
+  function pickOne(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function shuffled(a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  /** room k's stations: the plan, then mixes that always keep near / far and whose (no type twice; a text every third room) */
+  function runStations(k) {
+    if (k < RUN_PLAN.length) return RUN_PLAN[k].slice();
+    var list = [pickOne(['say', 'fetch']), pickOne(['own', 'deliver', 'yesno']), k % 3 === 1 ? 'read' : pickOne(['question', 'sort', 'spell'])];
+    list.push(pickOne(['say', 'fetch', 'own', 'deliver'].filter(function (t) { return list.indexOf(t) < 0; })));
+    return shuffled(list);
+  }
+  function runStation(b, type, room, k, j) {
+    var o = {};
+    if (type === 'say') o.form = k === 0 && j === 0 ? pickOne(['this', 'that']) : 'deck';   // the very first one: one thing
+    else if (type === 'fetch') o.form = 'deck';
+    else if (type === 'deliver') o.owner = 'deck';
+    else if (type === 'own') o.answer = 'deck';
+    else if (type === 'question') o.kind = 'deck';
+    else if (type === 'sort') o.cat = 'deck';
+    else if (type === 'spell') o.word = pickOne(RUN_WORDS);
+    else if (type === 'read') o.text = pickOne(RUN_TEXTS);
+    if (room.theme === 'library' && (type === 'say' || type === 'fetch')) o.high = true;   // the far things up on a bookcase
+    b.station(type, o);
+  }
+  /** something of the room at its start */
+  function roomStart(b, room, x) {
+    var th = room.theme;
+    if (th === 'yard') { b.deco('tree', x + 7, G); b.deco('bush', x, G); }
+    else if (th === 'classroom') b.deco('teacherDesk', x + 6, G);
+    else if (th === 'library') { b.deco('shh', x + 7, G); b.deco('globe', x + 1, G); }
+    else if (th === 'music') b.deco('drum', x + 7, G);
+    else if (th === 'cafeteria') { b.plank(x + 6, G - 2, 3); b.deco('lunchTable', x + 6, G); }
+    else if (th === 'roof') b.deco('roofDoor', x + 1, G);
+  }
+  /** between two stations: eight columns, a low hop, a thing of the room; later on a blob to jump on */
+  function runHop(b, room, k, j) {
+    var x = b.x, th = room.theme;
+    b.ground(x, x + 8);
+    if (th === 'classroom') { b.plank(x + 3, 9, 2); b.deco('desk', x + 3, G); }
+    else if (th === 'library') { b.plank(x + 2, 9, 3); b.deco('table', x + 2, G); }
+    else if (th === 'cafeteria') { b.plank(x + 2, G - 2, 3); b.deco('lunchTable', x + 2, G); }
+    else {
+      b.bricks(x + 3, G - 1, 2, 1);
+      if (th === 'yard') b.deco('bush', x + 6, G);
+      else if (th === 'music') b.deco('drum', x + 6, G);
+    }
+    if (k >= 2 && j === 2) b.goo(x + 6, 1);
+    b.x += 8;
+  }
+  function endlessRoom(k) {
+    var room = ROOMS[k % ROOMS.length], next = ROOMS[(k + 1) % ROOMS.length], x;
+    var b = new Builder(200);
+    b.zones = [];
+    b.beginZone({ id: 'run', name: room.name, theme: room.theme, nouns: room.nouns, room: k });
+    x = b.x;
+    b.ground(x, x + 10);
+    roomStart(b, room, x);
+    b.zone.startX = (x + 3) * 16;
+    b.x += 10;
+    runStations(k).forEach(function (type, j) {
+      if (j) runHop(b, room, k, j);
+      runStation(b, type, room, k, j);
+    });
+    x = b.x;                                   // the way on: a door to the next room
+    b.ground(x, x + 14);
+    if (room.theme === 'roof') b.deco('roofDoor', x + 9, G);
+    else b.deco('door', x + 9, G, { label: next.id === 'yard' ? 'YARD' : next.name.replace('The ', '').toUpperCase() });
+    b.x += 14;
+    b.endZone(x + 9);
+    b.levelW = b.x * 16;
+    b.start = { x: b.zone.startX, y: G * 16 };
+    b.name = 'Endless';
+    b.endless = true; b.room = k;
+    return b;
+  }
+
+  return { ROWS: ROWS, G: GROUND_ROW, STATION_W: STATION_W, T: T, unit2: unit2, endlessRoom: endlessRoom, ROOMS: ROOMS };
 })();
+
+</script>
+<script>/* js/config.js */
+/* Pocket Quest - settings the teacher fills in.
+ *
+ * classTable: the web app address of the class table, a Google Sheet of the
+ * teacher's with tools/class-table.gs in it (docs/SINIF_TABLOSU.md says how).
+ * Each finished endless run is sent there (the name and the points) and the
+ * class's top 10 comes back. Empty: the endless run keeps its table on this
+ * device only.
+ */
+window.PQ = window.PQ || {};
+PQ.CONFIG = {
+  // the teacher's class table (2026-11-08). Test bots never send to it
+  // (navigator.webdriver: classTableUrl in game.js).
+  classTable: 'https://script.google.com/macros/s/AKfycbxdsDBdhnPYTO2qPyrcOSRqoG_pADueDM15SDPMXfh44blrUZs7O1xyAwThWOeowa08/exec'
+};
 
 </script>
 <script>/* js/game.js */
@@ -5538,8 +5659,9 @@ PQ.levels = (function () {
 
   /* ================================================================ level setup */
   var HERO_H = 42, HERO_W = 12;
-  function startLevel() {
-    var lvl = G.lvl = L.unit2();
+  /** set up a level: Unit 2, or one room of the endless run (lvl) */
+  function startLevel(lvl) {
+    lvl = G.lvl = lvl || L.unit2();
     SC.reset();
     G.zone = 0; G.fade = null; G.report = null; G.zoneTitle = null;
     G.hero = { x: lvl.start.x, y: GY - HERO_H, w: HERO_W, h: HERO_H, vx: 0, vy: 0, onGround: true, face: 1,
@@ -5583,7 +5705,7 @@ PQ.levels = (function () {
       if (def.zone !== zoneNow) { decks = {}; zoneNow = def.zone; }
       var pool = lvl.zones[def.zone].nouns;   // a zone's own things (balls in the gym, apples at lunch)
       var st = { i: i, zone: def.zone, type: def.type, x0: def.s * TS, gateX: def.gateX, state: 'idle', mistakes: 0,
-        gateOpen: 0, opening: false, blocks: [], items: [], npcs: [], legend: !!def.legend, firstStation: i === 0, high: !!def.high, beat: def.beat };
+        gateOpen: 0, opening: false, blocks: [], items: [], npcs: [], legend: !!def.legend, firstStation: i === 0 && !lvl.room, high: !!def.high, beat: def.beat };
       var n = C.NOUNS[def.noun || deal('noun', pool || C.DEMO_NOUNS)];
       var anyForm = ['this', 'that', 'these', 'those'];
       if (def.type === 'say') setupSay(st, C.FORMS[def.form === 'deck' ? deal('demo', anyForm) : def.form], n, def.high);
@@ -5598,8 +5720,10 @@ PQ.levels = (function () {
       return st;
     });
     // at the end of the yard Batuhan Teacher and Mia wait by the school door
-    G.npcs.push(npc('batuhan', lvl.zones[0].doorX - 52, -1));
-    G.npcs.push(npc('mia', lvl.zones[0].doorX - 86, 1));
+    if (!lvl.endless) {
+      G.npcs.push(npc('batuhan', lvl.zones[0].doorX - 52, -1));
+      G.npcs.push(npc('mia', lvl.zones[0].doorX - 86, 1));
+    }
   }
   function zoneOf(i) { return G.lvl.zones[i]; }
 
@@ -5976,6 +6100,7 @@ PQ.levels = (function () {
     st.openIn = 1.3;
   }
   function wrong(st, b, hintText, hintWho) {
+    if (G.endless) { endlessOver(st, b); return; }   // in a run the first mistake ends it
     st.mistakes++;
     snd.play('wrong');
     G.flash = 0.25;
@@ -6057,6 +6182,7 @@ PQ.levels = (function () {
     G.score.total++; if (first) G.score.right++;
     var z = G.score.zones[zone]; z.total++; if (first) z.right++;
     G.score.log.push({ type: type, zone: zone, ok: first, sentence: sentence });
+    if (G.endless && first && !G.endless.over) endlessPoint();
   }
   function solveSilently(st) {
     st.state = 'solved'; snd.play('right');
@@ -7017,6 +7143,7 @@ PQ.levels = (function () {
 
   /* ================================================================ modes */
   function startGame(heroId, fromSave) {
+    G.endless = null; G.board = null;
     G.heroId = heroId; startLevel(); G.mode = 'play';
     if (fromSave) {
       G.score.stars = fromSave.stars || 0; G.score.right = fromSave.right || 0; G.score.total = fromSave.total || 0;
@@ -7044,6 +7171,11 @@ PQ.levels = (function () {
   var RUN_STEP = 5;   // px travelled per run frame: the planted foot moves 5px back per frame, so it stays put
   function updatePlay(dt) {
     G.t += dt;
+    if (G.endless && G.endless.over) {   // the run is over: the right answer shows, then the class table
+      var ov = G.endless.over; ov.t += dt;
+      if (ov.t > 3.4 || ((pressed.ok || pressed.act || pressed.jump) && ov.t > 1.2)) showBoard();
+      return;
+    }
     if (G.reading) {   // reading is a pause: the book stays until it is closed
       G.reading.t += dt;
       if ((pressed.ok || pressed.act) && G.reading.t > 0.5) closeBook();
@@ -7197,7 +7329,8 @@ PQ.levels = (function () {
     // ---- end of the zone: its door, with every gate in the zone open
     if (!zn.boss && !G.script && !G.fade && h.x + h.w / 2 > zn.doorX - 30 &&
         G.stations.every(function (s) { return s.zone !== G.zone || s.state === 'done'; })) {
-      zoneEnd();
+      if (G.endless) { h.vx = 0; snd.play('gate'); fadeThen(function () { enterRoom(G.endless.room + 1); }); }   // on to the next room
+      else zoneEnd();
     }
     if (G.zoneTitle) { G.zoneTitle.t -= dt; if (G.zoneTitle.t <= 0) G.zoneTitle = null; }
   }
@@ -7218,6 +7351,16 @@ PQ.levels = (function () {
     } else if (G.mode === 'results') {
       G.results.t += dt; G.t += dt;
       if ((pressed.ok || pressed.act) && G.results.t > 1) startGame(G.heroId);
+    } else if (G.mode === 'board' && G.board) {
+      G.board.t += dt; G.t += dt;
+      var E2 = G.endless;   // no answer from the class table in eight seconds: this device's table, and the run kept to send again
+      if (E2 && E2.table === 'wait') {
+        E2.waitT += dt;
+        if (E2.waitT > 8) { E2.table = 'offline'; keepPending(pendingRuns().concat([{ name: E2.name, score: E2.score }])); }
+      }
+      if (pressed.left || pressed.up) { if (G.board.sel) snd.play('blip'); G.board.sel = 0; }
+      if (pressed.right || pressed.down) { if (!G.board.sel) snd.play('blip'); G.board.sel = 1; }
+      if ((pressed.ok || pressed.act) && G.board.t > 1) boardGo(G.board.sel);
     }
     updateFade(dt);
     pressed = {};
@@ -7633,7 +7776,7 @@ PQ.levels = (function () {
         !G.emotes.some(function (e) { return e.ent === st.speakerNpc; })) U.emote(g, st.speakerNpc.x - cx, headTop(st.speakerNpc) - 2, '?', G.t);
   }
   function drawPrompt() {
-    var t = G.target; if (!t || G.script) return;
+    var t = G.target; if (!t || G.script || (G.endless && G.endless.over)) return;
     var ent = t.p || (t.kind === 'pip' ? G.pip : null);
     if (ent && G.bubbles.some(function (b) { return b.ent === ent; })) return;   // they are talking
     if (G.bubbles.some(function (b) { return b.ent !== G.hero && Math.abs(b.ent.x - t.x) < 70 && b.t > 1; })) return;   // someone next to them is
@@ -7661,7 +7804,8 @@ PQ.levels = (function () {
     });
   }
   function drawHud() {
-    U.hud(g, G.score.stars);
+    U.hud(g, G.score.stars, { noStars: !!G.endless });
+    if (G.endless) drawEndlessHud();
     button(454, 4, 22, 22, function () { snd.toggleMusic(); });
     if (!snd.musicOn()) { U.rect(g, INK, 456, 13, 19, 2); }
     fullscreenButton(434, 6);
@@ -7907,6 +8051,7 @@ PQ.levels = (function () {
         var bby = drawBanner({ banner: G.boss.banner, state: 'active' }), br = G.boss.rounds[G.boss.i];
         if (G.boss.legend && br && br.form) drawLegend(bby + 6, C.FORMS[br.form], G.boss.mistakes);
       }
+      if (G.endless && G.endless.over) drawOops();
       drawTip();
       drawTouch();
     }
@@ -8002,8 +8147,9 @@ PQ.levels = (function () {
     return null;
   }
   function saveHero() { try { localStorage.setItem(HERO_KEY, JSON.stringify({ look: G.look, name: NAMES.me })); } catch (e) {} }
+  /** letters (Turkish ones too), and a space or a dot for "Ayşe Nur" or "Elif K." (two Elifs on the class table); at most 12 */
   function cleanName(s) {
-    s = String(s || '').replace(/[^A-Za-zÇçĞğİıÖöŞşÜü]/g, '').slice(0, 10);
+    s = String(s || '').replace(/[^A-Za-zÇçĞğİıÖöŞşÜü .]/g, '').replace(/^[ .]+/, '').replace(/ {2,}/g, ' ').replace(/\.{2,}/g, '.').slice(0, 12);
     if (!s) return '';
     var f = s.charAt(0);
     f = f === 'i' ? 'İ' : f === 'ı' ? 'I' : f.toUpperCase();
@@ -8012,7 +8158,7 @@ PQ.levels = (function () {
   /* typing the name: a hidden text field brings up the keyboard on a tablet
    * and takes Turkish letters from any keyboard layout */
   var nameInput = document.createElement('input');
-  nameInput.type = 'text'; nameInput.maxLength = 10; nameInput.autocomplete = 'off'; nameInput.spellcheck = false;
+  nameInput.type = 'text'; nameInput.maxLength = 12; nameInput.autocomplete = 'off'; nameInput.spellcheck = false;
   nameInput.setAttribute('autocapitalize', 'words'); nameInput.setAttribute('aria-label', 'My name is');
   nameInput.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;border:0;padding:0;margin:0;font-size:16px;' +
     '-webkit-user-select:text;user-select:text;pointer-events:none';
@@ -8038,7 +8184,8 @@ PQ.levels = (function () {
     var C2 = G.create; if (!C2 || !C2.typing) return;
     C2.typing = false;
     try { nameInput.blur(); } catch (e) {}
-    if (C2.name) { C2.say = 2.6; say('me', 'My name is ' + C2.name + '.'); }
+    C2.name = C2.name.replace(/[ ]+$/, '');   // a space typed last
+    if (C2.name) { C2.say = 2.6; say('me', 'My name is ' + C2.name + (/\.$/.test(C2.name) ? '' : '.')); }
     snd.play('pick');
   }
   /** typing without the hidden field (it could not take focus): keys straight in */
@@ -8050,9 +8197,10 @@ PQ.levels = (function () {
   }
 
   /* ---- the student card (mode 'create') */
-  function openCreate() {
+  function openCreate(endless) {
     var saved = loadHero();
-    G.create = { look: JSON.parse(JSON.stringify(saved ? saved.look : PRESETS.rio)), name: saved ? saved.name : '', row: 0, t: 0, typing: false, wave: 0, say: 0 };
+    G.create = { look: JSON.parse(JSON.stringify(saved ? saved.look : PRESETS.rio)), name: saved ? saved.name : '', row: 0, t: 0, typing: false, wave: 0, say: 0,
+      endless: !!endless, need: 0 };
     CH.define('me', heroDef(G.create.look));
     G.mode = 'create';
     say('pip', 'Tweet! Who are you? Type your name!');
@@ -8074,10 +8222,14 @@ PQ.levels = (function () {
   function finishCreate() {
     var C2 = G.create;
     if (C2.typing) stopTyping();
+    C2.name = C2.name.replace(/[ ]+$/, '');
+    // the class table needs a real name
+    // (the box flashes; a tap on it brings up a tablet's keyboard, which a tap on Let's go! cannot)
+    if (C2.endless && !C2.name) { C2.row = 0; C2.need = 2.6; say('pip', 'Type your name!'); snd.play('wrong'); return; }
     applyHero(C2.look, C2.name);
     saveHero();
     G.create = null;
-    startGame('me');
+    if (C2.endless) { G.heroId = 'me'; startEndless(); } else startGame('me');
   }
   var CREATE_ROWS = LOOK_ROWS.length + 2;   // the name, the looks, the start button
   function updateCreate(dt) {
@@ -8085,6 +8237,7 @@ PQ.levels = (function () {
     G.t += dt; C2.t += dt;
     if (C2.wave > 0) C2.wave -= dt;
     if (C2.say > 0) C2.say -= dt;
+    if (C2.need > 0) C2.need -= dt;
     if (C2.typing) {
       if (document.activeElement !== nameInput && !C2.fallback) C2.fallback = true;   // typed through typeKey
       return;
@@ -8132,8 +8285,8 @@ PQ.levels = (function () {
     g.drawImage(hero, Math.round(px - hero.anchor.x), Math.round(base + 1 - hero.anchor.y));
     var pip = CH.get('pip', Math.floor(t * 8) % 2 ? 'flap' : 'rest', 'happy', 1);
     drawSprite(pip, px + 52, 118 + Math.round(Math.sin(t * 3) * 3), -1);
-    var line = C2.say > 0 && C2.name ? 'Hello, ' + C2.name + '!' : C2.typing ? 'My name is...' : 'Tweet! Who are you?';
-    U.bubble(g, px + 50, 96, line);
+    var line = C2.need > 0 && !C2.name ? 'Type your name!' : C2.say > 0 && C2.name ? 'Hello, ' + C2.name + '!' : C2.typing ? 'My name is...' : 'Tweet! Who are you?';
+    U.bubble(g, px + 50, 96, line, { maxW: 76 });   // narrow: it stays clear of the card
     // a dice: a new look
     var rx = px - 34, ry2 = GY + 10;
     U.card(g, rx, ry2, 68, 18, { fill: '#fff6e0' });
@@ -8153,8 +8306,9 @@ PQ.levels = (function () {
     rowBg(0, ry, 20);
     F.draw(g, 'My name is', x0 + 14, ry + 2, { color: '#ffffff' });
     var bx = x0 + 96, bw = 132;
+    if (C2.need > 0 && Math.floor(t * 6) % 2) U.rect(g, GOLD, bx - 2, ry - 3, bw + 4, 21);   // "Type your name!": the box flashes
     U.rect(g, INK, bx, ry - 1, bw, 17); U.rect(g, C2.typing ? '#ffffff' : '#f4efff', bx + 1, ry, bw - 2, 15);
-    var shown = C2.name || (C2.typing ? '' : (C2.look.body === 'girl' ? 'Luna' : 'Rio'));
+    var shown = C2.name || (C2.typing || C2.endless ? '' : (C2.look.body === 'girl' ? 'Luna' : 'Rio'));   // a run needs the child's own name: no stand-in
     var nw = F.draw(g, shown, bx + 6, ry + 3, { color: C2.name ? INK : '#a9a0c8' });
     if (C2.typing && Math.floor(t * 2.5) % 2) U.rect(g, INK, bx + 7 + (C2.name ? nw : 0), ry + 2, 1, 11);
     F.draw(g, '.', bx + bw + 3, ry + 3, { color: '#ffffff' });
@@ -8195,15 +8349,17 @@ PQ.levels = (function () {
   var TITLE_LOOT = [['bag', 322], ['ball', 346], ['crayon', 366], ['book', 334], ['crayon', 386], ['lunchbox', 356], ['pencil', 326]];
   var titleHeroKey = null;
   function titleItems(sv) {
-    return sv ? [['Continue  ▶', 'Zone ' + (sv.zone + 1) + ' · ' + (sv.name || NAMES[sv.hero] || ''), 'continue'], ['New game', 'Make your hero', 'new']]
-              : [['Start  ▶', 'Make your hero', 'new']];
+    var hv = loadHero(), best = hv && hv.name ? endlessBest(hv.name) : 0;
+    var run = ['Endless', best ? 'My best: ' + best : 'Top 10', 'endless'];
+    return sv ? [['Continue  ▶', 'Zone ' + (sv.zone + 1) + ' · ' + (sv.name || NAMES[sv.hero] || ''), 'continue'], ['New game', 'Make your hero', 'new'], run]
+              : [['Start  ▶', 'Make your hero', 'new'], run];
   }
   function titleGo(action, sv) {
     snd.play('pick');
     if (action === 'continue' && sv) {
       if (sv.hero === 'me') applyHero(sv.look || PRESETS.rio, sv.name);
       startGame(sv.hero, sv);
-    } else openCreate();
+    } else openCreate(action === 'endless');
   }
   function drawTitle() {
     uiButtons = [];
@@ -8261,12 +8417,15 @@ PQ.levels = (function () {
     U.rect(g, 'rgba(26,16,52,0.72)', Math.round(VW / 2 - uw / 2), uy - 2, uw, 14); U.rect(g, 'rgba(26,16,52,0.72)', Math.round(VW / 2 - uw / 2) + 1, uy - 3, uw - 2, 16);
     F.draw(g, ut, VW / 2, uy, { color: '#ffffff', bold: false, align: 'center' });
     // the menu
-    var items = titleItems(sv), bw = 132, bh = 28, gap = 12, total = items.length * bw + (items.length - 1) * gap, x = Math.round(VW / 2 - total / 2), by = 234;
+    // three buttons sit right of the key hints; two stay in the middle
+    var items = titleItems(sv), three = items.length > 2, bw = three ? 116 : 132, bh = 28, gap = three ? 8 : 12;
+    var total = items.length * bw + (items.length - 1) * gap, x = three && !G.touch ? 82 : Math.round(VW / 2 - total / 2), by = 234;
     if (G.titleSel >= items.length) G.titleSel = 0;
     items.forEach(function (it, i) {
       var on = G.titleSel === i, bx = x + i * (bw + gap);
       U.rect(g, INK, bx, by, bw, bh); U.rect(g, on ? '#f7a83a' : '#3a2f66', bx + 1, by + 1, bw - 2, bh - 2); U.rect(g, on ? '#ffd98a' : '#5a4f86', bx + 1, by + 1, bw - 2, 1);
       if (on) { U.rect(g, '#ffffff', bx - 2, by - 2, bw + 4, 1); U.rect(g, '#ffffff', bx - 2, by + bh + 1, bw + 4, 1); }
+      if (it[2] === 'endless') { U.star(g, bx + 7, by + 4); U.star(g, bx + bw - 16, by + 4); }   // the run: a star either side
       F.draw(g, it[0], bx + bw / 2, by + 3, { color: on ? INK : '#ffffff', align: 'center' });
       F.draw(g, it[1], bx + bw / 2, by + 15, { color: on ? '#5a3418' : '#c9bfe8', align: 'center', bold: false });
       button(bx, by, bw, bh, (function (a) { return function () { titleGo(a, sv); }; })(it[2]));
@@ -8320,6 +8479,260 @@ PQ.levels = (function () {
     });
   }
 
+  /* ================================================================ endless
+   * A run: station after station until the first wrong answer. Every right
+   * answer is a point (a mistake ends the run, so every point is right the
+   * first time). Then the right answer shows ("Oops!") and the class table
+   * opens on the classroom chalkboard, with Play again and Menu. The table
+   * keeps the best score of each name: on this device (localStorage
+   * pq.endless) and, when the teacher has set one up (PQ.CONFIG.classTable),
+   * in the class table online. */
+  var ENDLESS_KEY = 'pq.endless';
+  function endlessData() {
+    try { var d = JSON.parse(localStorage.getItem(ENDLESS_KEY) || 'null'); if (d && d.rows) return d; } catch (e) {}
+    return { rows: [] };
+  }
+  function nameKey(n) { return String(n || '').toLocaleLowerCase('tr'); }
+  function endlessBest(name) {
+    var k = nameKey(name), r = endlessData().rows.filter(function (o) { return nameKey(o.name) === k; })[0];
+    return r ? r.score : 0;
+  }
+  function startEndless() {
+    G.board = null;
+    G.endless = { name: heroName(), score: 0, best: endlessBest(heroName()), over: null, popT: -9, room: 0 };
+    enterRoom(0);
+  }
+  /** room k of the run (level.js builds it); the points and the tips already given go along */
+  function enterRoom(k) {
+    var E = G.endless, told = [G.toldAct, G.toldRead, G.toldAsk];
+    startLevel(L.endlessRoom(k));
+    E.room = k;
+    if (k > 0) { G.toldAct = told[0]; G.toldRead = told[1]; G.toldAsk = told[2]; }
+    G.mode = 'play'; enterZone(0);
+    G.zoneTitle = { text: 'Room ' + (k + 1) + ':  ' + G.lvl.zones[0].name, t: 2.6 };
+  }
+  function endlessPoint() {
+    var E = G.endless; E.score++; E.popT = G.t;
+    if (E.best && E.score === E.best + 1) { bubble(G.pip, 'New best! Tweet!', 2.2); say('pip', 'New best!'); }
+  }
+  /** the first wrong answer: the run is over, the right answer shows */
+  function endlessOver(st, b) {
+    var E = G.endless; if (E.over) return;
+    snd.play('wrong'); G.flash = 0.25;
+    E.over = { t: 0 };
+    st.state = 'over'; G.zoneTitle = null;
+    st.blocks.forEach(function (o) {
+      o.glow = false;
+      if (o === b) { o.state = 'wrong'; o.t = 0; }
+      else if (o.state !== 'right') o.state = o.value === st.answer ? 'right' : 'used';
+    });
+    if (st.type === 'fetch') st.items.forEach(function (it) { it.glow = it.form === st.form; });
+    if (st.type === 'deliver') st.npcs.forEach(function (p) { p.glow = ownerOf(p) === st.scene.owner; });
+    if (st.type === 'spell') st.banner.got = st.word.length;
+    else { st.banner.filled = st.answer; st.banner.ok = true; }
+    st.banner.hint = null;
+    if (st.type === 'say') st.legend = true;
+    st.mistakes = 2;                                   // the near / far table marks the right form in green
+    G.tip = null;
+    // the banner shows the right sentence; a bubble would cover the green block
+    var full = st.full || (st.scene && st.scene.sentence) || (st.type === 'read' && st.reading ? st.reading.qs[st.qi].answer + '.' : '');
+    if (full) say('pip', full);
+    G.bubbles = [];
+    G.hero.vx = 0; G.hero.expr = 'sad';
+  }
+  function showBoard() {
+    var E = G.endless, d = endlessData(), k = nameKey(E.name);
+    var mine = d.rows.filter(function (o) { return nameKey(o.name) === k; })[0];
+    E.first = !mine;                                    // a first run has no best to beat
+    E.newBest = !!mine && E.score > mine.score;
+    if (!mine) { mine = { name: E.name, score: E.score }; d.rows.push(mine); }
+    else if (E.score > mine.score) { mine.score = E.score; mine.name = E.name; }
+    d.rows.sort(function (a, b2) { return b2.score - a.score; });
+    try { localStorage.setItem(ENDLESS_KEY, JSON.stringify(d)); } catch (e) {}
+    E.rows = d.rows; E.rank = d.rows.indexOf(mine) + 1; E.best = Math.max(E.best, E.score); E.me = null;
+    // the class table: send the run, show the class's top 10 when it comes back
+    E.table = classTableUrl() ? 'wait' : 'device'; E.waitT = 0;
+    if (E.table === 'wait') {
+      var run = E;
+      sendRun(E.name, E.score, function (res) {
+        if (G.endless !== run) return;            // they have moved on
+        if (!res) { run.table = 'offline'; return; }
+        run.rows = res.rows.map(function (r) { return { name: String(r.name), score: +r.score || 0 }; });
+        run.rank = +res.rank || 0;
+        run.me = res.me ? { name: String(res.me.name), score: +res.me.score || 0 } : null;
+        run.table = 'class';
+      });
+    }
+    G.board = { t: 0, sel: 0 };
+    G.mode = 'board'; G.flash = 0; G.bubbles = [];
+    snd.play(E.newBest ? 'win' : 'pick');
+    say('batuhan', E.newBest ? 'New best! Well done!' : E.first ? 'Well done!' : 'Good try! Play again!');
+  }
+  /* ---- the class table online: a Google Sheet of the teacher's (the address
+   * is PQ.CONFIG.classTable; the script is tools/class-table.gs). A finished
+   * run goes there and the class's top 10 comes back. Without the internet
+   * the run waits on this device and goes along with the next one. */
+  var PENDING_KEY = 'pq.endless.pending';
+  /** the class table's address. A test bot's browser (navigator.webdriver) never writes into the real table
+   * (its made-up children would show on the class's board) unless the test says so (botsMaySend, with a fake fetch). */
+  function classTableUrl() {
+    var c = PQ.CONFIG || {};
+    if (navigator.webdriver && !c.botsMaySend) return '';
+    return c.classTable || '';
+  }
+  function pendingRuns() {
+    try { var p = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]'); return Array.isArray(p) ? p : []; } catch (e) { return []; }
+  }
+  function keepPending(runs) {   // one run per name, the best, until it can be sent
+    var best = {};
+    runs.forEach(function (r) { var k = nameKey(r.name); if (!best[k] || r.score > best[k].score) best[k] = { name: r.name, score: r.score }; });
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(Object.keys(best).map(function (k) { return best[k]; }).slice(0, 20))); } catch (e) {}
+  }
+  /** done(table) with { rows: the top 10, rank, me } from the class table, or done(null) */
+  function sendRun(name, score, done) {
+    var url = classTableUrl(), runs = pendingRuns().concat([{ name: name, score: score }]);
+    if (!url || !window.fetch) { done(null); return; }
+    function fail() { keepPending(runs); done(null); }
+    try {
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ name: name, runs: runs }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.ok || !Array.isArray(d.rows)) { fail(); return; }
+          try { localStorage.removeItem(PENDING_KEY); } catch (e) {}
+          done(d);
+        }, fail);
+    } catch (e) { fail(); }
+  }
+  /** the lines on the board: the top 10; below them, after a gap, the player's own line when it is further down */
+  function boardRows() {
+    var E = G.endless, out = [], rank = E.rank || 0;
+    (E.rows || []).slice(0, 10).forEach(function (r, i) { out.push({ rank: i + 1, name: r.name, score: r.score, mine: i + 1 === rank }); });
+    if (rank > 10) {
+      var me = E.me || (E.rows || [])[rank - 1] || { name: E.name, score: E.score };
+      out = out.slice(0, 9); out.push(null, { rank: rank, name: me.name, score: me.score, mine: true });
+    }
+    return out;
+  }
+  function boardGo(i) {
+    if (G.fade) return;
+    snd.play('pick');
+    if (i === 0) fadeThen(function () { startEndless(); });
+    else { G.mode = 'title'; G.titleSel = 0; G.endless = null; G.board = null; G.script = null; G.dialog = null; }
+  }
+
+  /* ---- chalk and chalkboards (the answer blocks' slate and wood, bigger) */
+  function hash1(n) { var s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+  function chalkboardAt(x, y, w, h) {
+    var f = U.WOOD, s = U.SLATE.idle.s, b = h > 60 ? 6 : 3;
+    U.rect(g, 'rgba(10,6,20,0.3)', x + 2, y + 3, w, h);
+    U.rect(g, INK, x, y - 1, w, h + 2); U.rect(g, INK, x - 1, y, w + 2, h);
+    U.rect(g, f[1], x, y, w, h);                                              // the wooden frame
+    U.rect(g, f[0], x, y, w, 1); U.rect(g, f[0], x, y, 1, h - 1);
+    U.rect(g, f[2], x, y + h - 1, w, 1); U.rect(g, f[2], x + w - 1, y + 1, 1, h - 1);
+    U.rect(g, f[3], x + b - 1, y + b - 1, w - 2 * b + 2, h - 2 * b + 2);     // the slate, set in
+    U.rect(g, s[1], x + b, y + b, w - 2 * b, h - 2 * b);
+    U.rect(g, s[2], x + b, y + b, w - 2 * b, 1); U.rect(g, s[2], x + b, y + b, 1, h - 2 * b);
+    U.rect(g, s[0], x + b, y + h - b - 1, w - 2 * b, 1);
+    for (var k = 0; k < w * h / 260; k++) {                                     // old chalk, rubbed out
+      U.rect(g, s[0], x + b + 2 + Math.floor(hash1(k * 3 + w) * (w - 2 * b - 12)), y + b + 2 + Math.floor(hash1(k * 7 + h) * (h - 2 * b - 4)), 2 + Math.floor(hash1(k) * 8), 1);
+    }
+  }
+  var chalkCache = {};
+  /** text in chalk: some pixels thinner, room above for the marks of İ Ş Ö Ü Ç Ğ */
+  function chalkImg(text, col, bold) {
+    var key = text + '|' + col + '|' + bold;
+    if (chalkCache[key]) return chalkCache[key];
+    var w = F.measure(text, bold) + 4, h = 22, c = document.createElement('canvas'); c.width = w; c.height = h;
+    var cg = c.getContext('2d');
+    F.draw(cg, text, 2, 6, { color: col, bold: bold });
+    var d = cg.getImageData(0, 0, w, h), px = d.data;
+    for (var i = 0; i < w * h; i++) if (px[i * 4 + 3] > 0 && hash1(i * 13 + text.length * 7) > 0.84) px[i * 4 + 3] = 120;
+    cg.putImageData(d, 0, 0);
+    return (chalkCache[key] = c);
+  }
+  function chalk(text, x, y, o) {
+    o = o || {};
+    var c = chalkImg(text, o.color || '#f8f5ea', o.bold !== false), s = o.scale || 1, tw = (c.width - 4) * s;
+    var dx = o.align === 'center' ? x - tw / 2 : o.align === 'right' ? x - tw : x;
+    g.drawImage(c, Math.round(dx - 2 * s), Math.round(y - 6 * s), c.width * s, c.height * s);
+    return tw;
+  }
+
+  /* ---- the run's points: a little slate top left, the best under it */
+  function drawEndlessHud() {
+    var E = G.endless, x = 4, y = 4, w = 62, h = 30;
+    chalkboardAt(x, y, w, h);
+    U.star(g, x + 7, y + 11);
+    var pop = Math.max(0, 0.45 - (G.t - E.popT)) / 0.45;
+    chalk(String(E.score), x + 38, y + 7 - Math.round(pop * 3), { scale: 2, align: 'center', color: pop > 0 ? '#ffe27e' : '#f8f5ea' });
+    if (E.best > 0) {
+      var nb = E.score > E.best;
+      F.draw(g, nb ? 'New best!' : 'Best ' + E.best, x + 1, y + h + 3, { color: nb ? GOLD : '#ffffff', outline: INK, bold: false });
+    }
+  }
+  function drawOops() {   // right of the near / far table when it is up
+    var o = G.endless.over, k = Math.min(1, o.t * 4), st = G.active, cx = st && st.legend ? 318 : VW / 2;
+    g.globalAlpha = k; ribbon(cx, Math.round(84 - (1 - k) * 16), 'Oops!'); g.globalAlpha = 1;
+    // the right thing or the right person: a bouncing arrow over it
+    if (!st) return;
+    var bob = Math.round(Math.abs(Math.sin(G.t * 5)) * -4), marks = [];
+    if (st.type === 'fetch') st.items.forEach(function (it) { if (it.glow && !it.gone && !it.carried) marks.push([it.x, it.y - 30]); });
+    if (st.type === 'deliver') st.npcs.forEach(function (p) { if (p.glow) marks.push([p.x, headTop(p) - 4]); });
+    marks.forEach(function (m) { F.draw(g, '▼', Math.round(m[0] - G.cam.x), Math.round(m[1] - 18 + bob), { color: GOLD, outline: INK, align: 'center', scale: 2 }); });
+  }
+
+  /* ---- the class table: Batuhan Teacher at the board, the hero beside it */
+  function drawBoard() {
+    uiButtons = [];
+    var E = G.endless, Bd = G.board, t = G.t;
+    SC.classroomBackground(g, 80);
+    U.rect(g, '#3a2418', 0, GY - 1, VW, 1); U.rect(g, '#d9a066', 0, GY, VW, 6); U.rect(g, '#f6c890', 0, GY, VW, 1); U.rect(g, '#7a4a2e', 0, GY + 6, VW, VH - GY - 6);
+    g.fillStyle = 'rgba(16,10,34,0.25)'; g.fillRect(0, 0, VW, VH);
+    var w = 252, h = 178, x = Math.round(VW / 2 - w / 2), y = 26, f = U.WOOD;
+    chalkboardAt(x, y, w, h);
+    U.rect(g, INK, x - 5, y + h, w + 10, 5); U.rect(g, f[1], x - 4, y + h + 1, w + 8, 3); U.rect(g, f[0], x - 4, y + h + 1, w + 8, 1);   // the chalk tray
+    U.rect(g, '#ffffff', x + 20, y + h - 1, 9, 2); U.rect(g, '#ffd64a', x + 34, y + h - 1, 7, 2); U.rect(g, '#ff8fab', x + 46, y + h - 1, 7, 2);
+    var hw = chalk('TOP 10', VW / 2, y + 10, { align: 'center' });
+    U.star(g, Math.round(VW / 2 - hw / 2 - 16), y + 10); U.star(g, Math.round(VW / 2 + hw / 2 + 7), y + 10);
+    for (var dx = x + 16; dx < x + w - 16; dx += 4) U.rect(g, 'rgba(248,245,234,0.45)', dx, y + 25, 2, 1);
+    var ry = y + 32;
+    if (E.table === 'wait') {   // the class table is on its way: three chalk dots, one after another
+      for (var di = 0; di < 3; di++) if (Math.floor(t * 3) % 4 > di) U.rect(g, '#f8f5ea', VW / 2 - 16 + di * 13, y + 86, 5, 5);
+    } else boardRows().forEach(function (r) {
+      if (!r) { chalk('· · ·', VW / 2, ry - 3, { align: 'center', bold: false, color: '#cfe8d6' }); ry += 8; return; }
+      var col = r.mine ? '#ffe27e' : '#f8f5ea';
+      if (r.mine) {
+        U.rect(g, 'rgba(255,226,126,0.18)', x + 10, ry - 2, w - 20, 13);
+        F.draw(g, '▶', x + 14 + Math.round(Math.sin(t * 6)), ry, { color: '#ffe27e', bold: false });
+      }
+      var medal = r.rank === 1 ? '#ffd64a' : r.rank === 2 ? '#e6eef4' : r.rank === 3 ? '#f0a868' : col;
+      chalk(r.rank + '.', x + 48, ry, { align: 'right', color: medal });
+      chalk(r.name, x + 56, ry, { color: col });
+      chalk(String(r.score), x + w - 22, ry, { align: 'right', color: col });
+      ry += 13;
+    });
+    if (E.table === 'offline') F.draw(g, 'No internet: this device only', VW / 2, y + h + 9, { color: '#ffffff', outline: INK, bold: false, align: 'center' });
+    // Batuhan Teacher points at the table; the hero cheers (a new best) or keeps their chin up
+    var tc = CH.get('batuhan', 'point', blinking(0.3) ? 'blink' : 'happy', 1);
+    WD.shadow(g, 70, GY + 1, 17); drawSprite(tc, 70, GY + 1, 1);
+    var hid = G.heroId || 'me', hp = E.newBest ? (Math.floor(t * 3) % 2 ? 'cheer' : 'stand') : Math.floor(t * 1.6) % 2 ? 'breathe' : 'stand';
+    var hs = CH.get(hid, hp, blinking(0.6) ? 'blink' : E.newBest || E.first ? 'happy' : 'neutral', 1);
+    WD.shadow(g, 410, GY + 1, 17); drawSprite(hs, 410, GY + 1, -1);
+    var pip = CH.get('pip', Math.floor(t * 8) % 2 ? 'flap' : 'rest', E.newBest ? 'happy' : 'neutral', 1);
+    drawSprite(pip, 438, 186 + Math.round(Math.sin(t * 3) * 3), -1);
+    ribbon(VW / 2, 5, E.newBest ? 'New best!  ' + E.score : 'Your score:  ' + E.score);
+    // Play again / Menu
+    [['Play again', 0], ['Menu', 1]].forEach(function (bt) {
+      var i2 = bt[1], on = Bd.sel === i2, bw = 104, bh = 22, bx = Math.round(VW / 2 + (i2 ? 8 : -8 - bw)), byy = 238;
+      U.rect(g, INK, bx, byy, bw, bh); U.rect(g, on ? '#f7a83a' : '#3a2f66', bx + 1, byy + 1, bw - 2, bh - 2); U.rect(g, on ? '#ffd98a' : '#5a4f86', bx + 1, byy + 1, bw - 2, 1);
+      if (on) { U.rect(g, '#ffffff', bx - 2, byy - 2, bw + 4, 1); U.rect(g, '#ffffff', bx - 2, byy + bh + 1, bw + 4, 1); }
+      F.draw(g, bt[0], bx + bw / 2, byy + 5, { color: on ? INK : '#ffffff', align: 'center' });
+      button(bx, byy, bw, bh, function () { if (G.board && G.board.t > 0.6) { G.board.sel = i2; boardGo(i2); } });
+    });
+    if (!G.touch) { F.draw(g, '← →  choose', 6, 245, { color: '#ffffff', outline: INK, bold: false }); F.draw(g, 'E  OK', 6, 257, { color: '#ffffff', outline: INK, bold: false }); }
+    fullscreenButton(457, 6);
+  }
+
   function render() {
     g.imageSmoothingEnabled = false;
     if (G.mode === 'title') drawTitle();
@@ -8327,6 +8740,7 @@ PQ.levels = (function () {
     else if (G.mode === 'play') drawPlay();
     else if (G.mode === 'results') drawResults();
     else if (G.mode === 'report') drawReport();
+    else if (G.mode === 'board') drawBoard();
     drawFade();
     present();
   }
@@ -8407,6 +8821,13 @@ PQ.levels = (function () {
       return { look: C2.look, name: C2.name };
     },
     createDone: function () { if (G.create) finishCreate(); },
+    /* the endless run: start one as a named hero, read where it stands */
+    endless: function (name, look) { applyHero(look || PRESETS.luna, name || 'Ayşe'); G.heroId = 'me'; startEndless(); render(); },
+    endlessRoom: function (k) { if (G.endless) { G.fade = null; enterRoom(k); render(); } },
+    endlessState: function () {
+      var E = G.endless;
+      return E ? { mode: G.mode, score: E.score, best: E.best, over: !!E.over, rank: E.rank, newBest: E.newBest, rows: (E.rows || []).length } : { mode: G.mode };
+    },
     typeName: function (on) { if (on) startTyping(); else stopTyping(); },
     cleanName: cleanName,
     /* run the story to its end: lines are read, questions answered right,
@@ -8449,7 +8870,10 @@ PQ.levels = (function () {
       }
       var st = G.active; if (!st) return 'no station';
       // fetch / deliver: stand next to it, then press the interact key
-      function standAt(x, off, feetY) { h.x = x - h.w / 2 - (off || 14); h.y = (feetY || GY) - h.h; h.vx = h.vy = 0; self.step(2); }
+      function standAt(x, off, feetY) {   // let go of the keys first: a jump still buffered would lift the hero off the ground
+        Object.keys(keys).forEach(function (k) { keys[k] = false; }); h.jumpBuf = 0;
+        h.x = x - h.w / 2 - (off || 14); h.y = (feetY || GY) - h.h; h.vx = h.vy = 0; self.step(2);
+      }
       if (st.type === 'fetch') {
         var it = st.items.filter(function (o) { return right ? o.form === st.form : o.form !== st.form; })[0];
         standAt(it.x, 14, it.y); this.step(1, { act: true }); this.step(1, { act: false }); return st.state;
