@@ -570,9 +570,11 @@ PQ.chars2 = (function () {
      * canvas sneakers, messy dark brown hair, light olive (kumral) skin */
     batuhan: { adult: true, slim: true, skin: 'kumral', hair: 'darkbrown', style: 'messy', iris: ['#7a4a2a', '#2f1a10'],
       top: 'shirt', topR: 'shirt', legs: 'pants', legR: 'black', shoes: 'chucks', belt: true, thickBrows: true },
-    /* the same messy hair as a boy, in an old library photo */
+    /* the same messy hair as a boy, in an old library photo, in the blue wool
+     * coat his grandma made him: its pocket is the Pocket (docs/SEZONLAR.md;
+     * nobody knows yet) */
     kidBatuhan: { skin: 'kumral', hair: 'darkbrown', style: 'messy', iris: ['#7a4a2a', '#2f1a10'],
-      top: 'tee', topR: 'red', legs: 'shorts', legR: 'black', shoes: 'chucks' }
+      top: 'coat', topR: 'blue', legs: 'pants', legR: 'black', shoes: 'chucks' }
   };
 
   /* ------------------------------------------------------------ poses
@@ -708,6 +710,9 @@ PQ.chars2 = (function () {
       p.rbox(X(tw0 + lean), Y(topY), X(tw1 + lean), Y(hipY + 1), 2.6 * k, top, { vert: 0.4 });
       p.poly([[X(tw0 + 0.2 + lean), Y(hipY - 2.5)], [X(tw1 - 0.2 + lean), Y(hipY - 2.5)], [X(tw1 + 2.6 + lean * 0.5), Y(hipY + 4.6)], [X(tw0 - 2.4 + lean * 0.5), Y(hipY + 4.6)]], top, { cx: X(1 + lean), cy: Y(hipY - 3) });
       for (var pl = -2; pl <= 3; pl += 2.5) p.decal(['k', 'k'], Math.round(X(pl + 0.5 + lean * 0.6)), Math.round(Y(hipY + 2.6)), { k: top.c[2] });
+    } else if (d.top === 'coat') {   // a wool coat to just above the knees: the body, then its skirt over the thighs
+      p.rbox(X(tw0 + lean), Y(topY), X(tw1 + lean), Y(hipY + 1.4), 2.6 * k, top, { vert: 0.4 });
+      p.poly([[X(tw0 + 0.1 + lean), Y(hipY - 1.6)], [X(tw1 - 0.1 + lean), Y(hipY - 1.6)], [X(tw1 + 0.9 + lean * 0.5), Y(hipY + 5.2)], [X(tw0 - 0.7 + lean * 0.5), Y(hipY + 5.2)]], top, { cx: X(1 + lean), cy: Y(hipY - 3) });
     } else {
       p.rbox(X(tw0 + lean), Y(topY), X(tw1 + lean), Y(hipY + 1.4), (A ? 3 : 2.6) * k, top, { vert: 0.4 });
     }
@@ -859,6 +864,15 @@ PQ.chars2 = (function () {
         p.decal(k === 1 ? ['ss'] : ['ssss', 's..s', 'ssss'], Math.round(X(1.6 + lean)), Math.round(Y(hipY - 0.8)), { s: '#c8cbe8' });
       }
       p.part('cuffs', { soft: true });
+    } else if (d.top === 'coat') {   // a collar, a row of big buttons, a deep patch pocket on the near side
+      p.part('collar', { soft: true });
+      p.poly([[X(-0.6 + lean), Y(topY - 0.6)], [X(2.2 + lean), Y(topY + 2.2)], [X(-0.9 + lean), Y(topY + 3.0)]], top, { tone: 0 });
+      p.poly([[X(5.2 + lean), Y(topY - 0.6)], [X(2.8 + lean), Y(topY + 2.2)], [X(5.0 + lean), Y(topY + 2.8)]], top, { tone: 1 });
+      p.part('pocket', { soft: true });
+      p.rbox(X(-4.8 + lean * 0.6), Y(hipY - 1.4), X(0.6 + lean * 0.6), Y(hipY + 3.6), 1.0 * k, top, { tone: 3 });
+      p.decal(k === 1 ? ['wwwww'] : ['wwwwwwwwww', 'wwwwwwwwww'], Math.round(X(-4.6 + lean * 0.6)), Math.round(Y(hipY - 1.4)), { w: top.c[0] });   // its flap, catching the light
+      p.part('buttons', { contour: false });
+      for (var bt = 0; bt < 5; bt++) p.decal(k === 1 ? ['o'] : ['oo', 'oo'], Math.round(X(2.5 + lean * (bt < 3 ? 1 : 0.6))), Math.round(Y(topY + 3.4 + bt * 2.8)), { o: '#f2d38a' });
     } else if (d.top === 'vest') {   // a teacher: shirt collar, honey vest, bow tie, a bee pin
       p.part('shirt', { soft: true });
       p.poly([[X(0.6 + lean), Y(topY - 0.4)], [X(4.6 + lean), Y(topY - 0.4)], [X(2.6 + lean), Y(topY + 6.4)]], CLOTH[d.inner], { tone: 1 });
@@ -3354,7 +3368,9 @@ PQ.scenery = (function () {
     rect(g, INK, x + 6, base - 18, 2, 18); rect(g, INK, x + 14, base - 18, 2, 18);
     rect(g, INK, x - 2, base - 40, 26, 24); rect(g, '#c98a4b', x - 1, base - 39, 24, 22); rect(g, '#e0a868', x - 1, base - 39, 24, 1);
     rect(g, '#d9c6a0', x + 2, base - 36, 18, 16);
-    rect(g, '#a07040', x + 6, base - 33, 5, 5); rect(g, '#7a4a2a', x + 6, base - 34, 5, 2); rect(g, '#b08060', x + 7, base - 28, 3, 6);
+    rect(g, '#a07040', x + 6, base - 33, 5, 5); rect(g, '#7a4a2a', x + 6, base - 34, 5, 2);
+    // the boy's coat, a faded blue, to his knees: a pocket and a row of buttons
+    rect(g, '#7f97b8', x + 6, base - 28, 5, 7); rect(g, '#5f7898', x + 6, base - 25, 2, 2); rect(g, '#f2d38a', x + 9, base - 27, 1, 1); rect(g, '#f2d38a', x + 9, base - 24, 1, 1);
     rect(g, '#9a7aa8', x + 12, base - 35, 7, 7); rect(g, '#ffffff', x + 13, base - 33, 2, 2); rect(g, '#ffffff', x + 16, base - 33, 2, 2);
   }
   function signRight(g, x, base) {
@@ -8363,9 +8379,23 @@ PQ.CONFIG = {
       pg.fillStyle = '#d9c6a0'; pg.fillRect(0, 0, 76, 64);
       // he looks at the boy beside him (his sprite faces right: flip it)
       var gb = CH.get('grabbo', 'float0', 'neutral', 1); pg.save(); pg.translate(30 + gb.width, 0); pg.scale(-1, 1); pg.drawImage(gb, 0, 0); pg.restore();
-      var kid = CH.get('kidBatuhan', 'cheer', 'happy', 1); pg.drawImage(kid, 38 - kid.anchor.x - 8, 64 - kid.anchor.y + 2);
+      var kid = CH.get('kidBatuhan', 'cheer', 'happy', 1), kx = 38 - kid.anchor.x - 8, ky = 64 - kid.anchor.y + 2;
+      pg.drawImage(kid, kx, ky);
       pg.globalCompositeOperation = 'color'; pg.fillStyle = '#a07040'; pg.fillRect(0, 0, 76, 64);
-      pg.globalCompositeOperation = 'source-over'; pg.fillStyle = 'rgba(255,240,210,0.18)'; pg.fillRect(0, 0, 76, 64);
+      pg.globalCompositeOperation = 'source-over';
+      // ...but the boy's coat keeps a faded blue, like a hand-tinted old print: the blue wool coat (the
+      // finale's clue). Only his blue pixels: Grabbo's purple stays brown.
+      var kd = kid.getContext('2d').getImageData(0, 0, kid.width, kid.height).data, sep = pg.getImageData(0, 0, 76, 64), n = sep.data;
+      for (var y = 0; y < kid.height; y++) for (var x = 0; x < kid.width; x++) {
+        var px = kx + x, py = ky + y, o = (y * kid.width + x) * 4;
+        if (px < 0 || py < 0 || px >= 76 || py >= 64 || kd[o + 3] < 128) continue;
+        if (kd[o + 2] > kd[o] + 30 && kd[o + 2] > kd[o + 1] + 10) {
+          var q = (py * 76 + px) * 4;
+          for (var c = 0; c < 3; c++) n[q + c] = Math.round(n[q + c] * 0.45 + kd[o + c] * 0.55);
+        }
+      }
+      pg.putImageData(sep, 0, 0);
+      pg.fillStyle = 'rgba(255,240,210,0.18)'; pg.fillRect(0, 0, 76, 64);
     }
     return photoCv;
   }
@@ -9310,6 +9340,7 @@ PQ.CONFIG = {
     closeBook: function () { closeBook(); },
     runStep: RUN_STEP,
     heroSprite: function () { return heroLook(); },
+    photo: function () { return photoCanvas(); },   // the old library photo (the photo recipe draws it big)
     boss: function () { var B = G.boss; return B ? { phase: B.phase, round: B.i, rounds: B.rounds.length, bubbles: B.bubbles.map(function (o) { return o.word + ':' + o.state; }) } : null; }
   };
   window.READY = true;
